@@ -13,6 +13,7 @@ export default function BulkPartyUpload() {
   const [queue, setQueue] = useState([])
   const [savingAll, setSavingAll] = useState(false)
   const [savedTotal, setSavedTotal] = useState(0)
+  const [viewingId, setViewingId] = useState(null)
   const processingRef = useRef(false)
 
   useEffect(() => {
@@ -161,6 +162,7 @@ export default function BulkPartyUpload() {
               item={item}
               onChange={(field, value) => updateField(item.id, field, value)}
               onRemove={() => removeItem(item.id)}
+              onView={() => setViewingId(item.id)}
             />
           ))}
 
@@ -179,6 +181,16 @@ export default function BulkPartyUpload() {
             </button>
           </div>
         </div>
+      )}
+
+      {viewingId && (
+        <ImageModal
+          queue={queue}
+          viewingId={viewingId}
+          onClose={() => setViewingId(null)}
+          onNavigate={setViewingId}
+          onChange={updateField}
+        />
       )}
     </div>
   )
@@ -220,7 +232,7 @@ function Dropzone({ onFiles }) {
   )
 }
 
-function BulkRow({ item, onChange, onRemove }) {
+function BulkRow({ item, onChange, onRemove, onView }) {
   const isSaved = item.status === 'saved'
   const isError = item.status === 'error'
   const isProcessing = item.status === 'pending' || item.status === 'processing'
@@ -232,7 +244,12 @@ function BulkRow({ item, onChange, onRemove }) {
         isSaved ? 'border-line bg-sage/30 opacity-60' : 'border-line bg-white'
       }`}
     >
-      <img src={item.previewUrl} alt="" className="h-14 w-14 flex-shrink-0 rounded-md border border-line object-cover" />
+      <img
+        src={item.previewUrl}
+        alt=""
+        onClick={onView}
+        className="h-14 w-14 flex-shrink-0 cursor-pointer rounded-md border border-line object-cover hover:opacity-80"
+      />
 
       {isProcessing && <span className="text-sm text-ink-faint">Reading…</span>}
       {isError && <span className="text-sm text-rust">Couldn't read: {item.error}</span>}
@@ -270,11 +287,123 @@ function BulkRow({ item, onChange, onRemove }) {
         </>
       ) : null}
 
+      {(item.status === 'done' || isSaved) && (
+        <button onClick={onView} className="text-xs text-ink-light hover:text-ink">
+          View
+        </button>
+      )}
+
       {!isSaved && (
         <button onClick={onRemove} className="ml-auto text-xs text-ink-faint hover:text-rust">
           Remove
         </button>
       )}
     </div>
+  )
+}
+
+function ImageModal({ queue, viewingId, onClose, onNavigate, onChange }) {
+  const item = queue.find((f) => f.id === viewingId)
+  if (!item) return null
+
+  const index = queue.findIndex((f) => f.id === viewingId)
+  const prevItem = queue[index - 1]
+  const nextItem = queue[index + 1]
+  const isSaved = item.status === 'saved'
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="grid max-h-[90vh] w-full max-w-3xl grid-cols-1 gap-4 overflow-auto rounded-lg bg-white p-4 sm:grid-cols-2"
+      >
+        <div>
+          <img
+            src={item.previewUrl}
+            alt="Bill"
+            className="w-full rounded-md border border-line object-contain"
+          />
+          {item.confidence != null && item.confidence < 0.6 && (
+            <p className="mt-2 rounded-md bg-marigold/10 px-3 py-2 text-xs text-marigold">
+              Low confidence extraction — please double-check the fields.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-lg font-semibold text-ink">Bill details</h3>
+            <button onClick={onClose} className="text-ink-faint hover:text-ink">
+              ✕
+            </button>
+          </div>
+
+          <ModalField label="Invoice number">
+            <input
+              value={item.fields.invoice_number}
+              onChange={(e) => onChange(item.id, 'invoice_number', e.target.value)}
+              disabled={isSaved}
+              className="w-full rounded-md border border-line px-3 py-2 text-sm disabled:bg-sage/20"
+            />
+          </ModalField>
+          <ModalField label="Invoice date">
+            <input
+              type="date"
+              value={item.fields.invoice_date}
+              onChange={(e) => onChange(item.id, 'invoice_date', e.target.value)}
+              disabled={isSaved}
+              className="w-full rounded-md border border-line px-3 py-2 text-sm disabled:bg-sage/20"
+            />
+          </ModalField>
+          <ModalField label="Amount">
+            <input
+              type="number"
+              value={item.fields.amount}
+              onChange={(e) => onChange(item.id, 'amount', e.target.value)}
+              disabled={isSaved}
+              className="w-full rounded-md border border-line px-3 py-2 text-sm tabular-nums disabled:bg-sage/20"
+            />
+          </ModalField>
+          <ModalField label="GST amount (optional)">
+            <input
+              type="number"
+              value={item.fields.gst_amount}
+              onChange={(e) => onChange(item.id, 'gst_amount', e.target.value)}
+              disabled={isSaved}
+              className="w-full rounded-md border border-line px-3 py-2 text-sm tabular-nums disabled:bg-sage/20"
+            />
+          </ModalField>
+
+          <div className="flex justify-between pt-2">
+            <button
+              onClick={() => prevItem && onNavigate(prevItem.id)}
+              disabled={!prevItem}
+              className="text-sm text-ink-faint hover:text-ink disabled:opacity-30"
+            >
+              ← Previous
+            </button>
+            <button
+              onClick={() => nextItem && onNavigate(nextItem.id)}
+              disabled={!nextItem}
+              className="text-sm text-ink-faint hover:text-ink disabled:opacity-30"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ModalField({ label, children }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-ink-faint">{label}</span>
+      {children}
+    </label>
   )
 }
