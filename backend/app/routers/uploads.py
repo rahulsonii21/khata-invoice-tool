@@ -13,5 +13,8 @@ async def upload_image(file: UploadFile = File(...)):
     if not contents:
         raise HTTPException(400, "Empty file")
 
-    image_url = storage.save_invoice_image(contents, file.filename or "invoice.jpg")
+    try:
+        image_url = storage.save_invoice_image(contents, file.filename or "invoice.jpg")
+    except Exception as e:
+        raise HTTPException(502, f"Image storage error: {e}")
     return {"image_url": image_url}

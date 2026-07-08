@@ -34,7 +34,10 @@ async def extract_from_upload(file: UploadFile = File(...)):
         except Exception as e:
             raise HTTPException(502, f"Tesseract OCR error: {e}")
 
-    image_url = storage.save_invoice_image(contents, file.filename or "invoice.jpg")
+    try:
+        image_url = storage.save_invoice_image(contents, file.filename or "invoice.jpg")
+    except Exception as e:
+        raise HTTPException(502, f"Image storage error: {e}")
     result["image_url"] = image_url
 
     return schemas.OCRExtractResult(**result)
