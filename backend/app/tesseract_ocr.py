@@ -48,14 +48,24 @@ def preprocess_image(image_bytes: bytes) -> np.ndarray:
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # Upscale small images - Tesseract wants ~300 DPI equivalent; phone photos
-    # of a full invoice are often too low-resolution per character.
+    # Normalize to a target size in EITHER direction before the expensive
+    # steps below. Real phone photos are often 3000-4000px+ on the long edge;
+    # running denoising at full resolution is drastically slower (10x+) for
+    # no OCR accuracy benefit - Tesseract needs characters to be a reasonable
+    # pixel height, not the whole image to be huge. This was previously only
+    # handling the "too small" case, which let large photos time out.
     h, w = gray.shape
-    if max(h, w) < 1800:
-        scale = 1800 / max(h, w)
-        gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+    target = 1800
+    if max(h, w) != target:
+        scale = target / max(h, w)
+        interp = cv2.INTER_CUBIC if scale > 1 else cv2.INTER_AREA
+        gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=interp)
 
-    denoised = cv2.fastNlMeansDenoising(gray, h=10)
+    # Lighter, much faster denoising than fastNlMeansDenoising (which was the
+    # actual source of the slowdown - it's a quality-focused algorithm that
+    # does not scale well). A median blur removes salt-and-pepper phone-camera
+    # noise nearly as effectively for OCR purposes, at a fraction of the cost.
+    denoised = cv2.medianBlur(gray, 3)
     thresh = cv2.adaptiveThreshold(
         denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 15
     )
