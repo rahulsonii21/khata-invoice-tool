@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #FBFAF6;
+  color: #1F3A34;
+}
+
+/* Perforated / stamp-torn edge for the invoice card - signature visual element,
+   evokes a ledger receipt being torn from a book. */
+.torn-edge {
+  position: relative;
+}
+.torn-edge::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 8px;
+  background-image: radial-gradient(circle at 6px 0, transparent 5px, #FBFAF6 5px);
+  background-size: 12px 8px;
+  background-repeat: repeat-x;
+}
+
+.stamp {
+  transform: rotate(-6deg);
+  border: 2px solid currentColor;
+  border-radius: 4px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
