@@ -46,6 +46,13 @@ export const api = {
     return request('/api/ocr/extract', { method: 'POST', body: form })
   },
 
+  // Plain image upload (no OCR) - used when attaching a photo during manual entry
+  uploadImage: (file) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request('/api/uploads/image', { method: 'POST', body: form })
+  },
+
   // Export - these trigger a file download rather than returning JSON
   downloadPartyPdf: (partyId) => downloadFile(`/api/export/party/${partyId}/pdf`),
   downloadPartyExcel: (partyId) => downloadFile(`/api/export/party/${partyId}/excel`),

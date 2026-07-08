@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import { formatINR, formatDate, STATUS_STYLES } from '../utils'
+import { formatINR, formatDate, STATUS_STYLES, resolveImageUrl } from '../utils'
 
 export default function PartyDetail({ partyId, onBack }) {
   const [party, setParty] = useState(null)
@@ -170,6 +170,20 @@ function InvoiceCard({ invoice, expanded, onToggle, onChanged }) {
 
       {expanded && (
         <div className="mt-4 space-y-4 border-t border-line pt-4">
+          {invoice.raw_image_url && (
+            <a
+              href={resolveImageUrl(invoice.raw_image_url)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block"
+            >
+              <img
+                src={resolveImageUrl(invoice.raw_image_url)}
+                alt="Bill"
+                className="h-24 w-24 rounded-md border border-line object-cover hover:opacity-80"
+              />
+            </a>
+          )}
           {editing ? (
             <div className="grid grid-cols-2 gap-3">
               <LabeledInput

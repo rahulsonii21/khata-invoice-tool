@@ -19,3 +19,13 @@ export const STATUS_STYLES = {
   partially_paid: { label: 'Partial', className: 'text-marigold bg-marigold/10' },
   unpaid: { label: 'Due', className: 'text-rust bg-rust/10' },
 }
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+// raw_image_url is either a full Supabase URL or a relative local-disk path
+// (e.g. "/files/invoices/xxx.jpg") depending on how storage is configured.
+export function resolveImageUrl(rawUrl) {
+  if (!rawUrl) return null
+  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) return rawUrl
+  return `${API_BASE}${rawUrl}`
+}

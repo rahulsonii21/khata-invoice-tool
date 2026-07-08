@@ -12,6 +12,8 @@ export default function ManualEntry({ onSaved }) {
     gst_amount: '',
     remarks: '',
   })
+  const [photo, setPhoto] = useState(null)
+  const [photoPreview, setPhotoPreview] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
@@ -21,6 +23,12 @@ export default function ManualEntry({ onSaved }) {
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }))
+  }
+
+  function handlePhotoSelect(file) {
+    if (!file) return
+    setPhoto(file)
+    setPhotoPreview(URL.createObjectURL(file))
   }
 
   async function handleSave() {
@@ -37,6 +45,12 @@ export default function ManualEntry({ onSaved }) {
         setParties((p) => [...p, party])
       }
 
+      let image_url = null
+      if (photo) {
+        const uploadResult = await api.uploadImage(photo)
+        image_url = uploadResult.image_url
+      }
+
       await api.createInvoice({
         party_id: party.id,
         invoice_number: form.invoice_number || null,
@@ -44,7 +58,7 @@ export default function ManualEntry({ onSaved }) {
         amount: parseFloat(form.amount),
         gst_amount: form.gst_amount ? parseFloat(form.gst_amount) : null,
         remarks: form.remarks || null,
-        raw_image_url: null,
+        raw_image_url: image_url,
         ocr_confidence: null,
       })
 
@@ -56,6 +70,8 @@ export default function ManualEntry({ onSaved }) {
         gst_amount: '',
         remarks: '',
       })
+      setPhoto(null)
+      setPhotoPreview(null)
       onSaved?.()
     } catch (e) {
       setError(e.message)
@@ -121,6 +137,34 @@ export default function ManualEntry({ onSaved }) {
             value={form.remarks}
             onChange={(e) => update('remarks', e.target.value)}
           />
+        </Field>
+
+        <Field label="Bill photo (optional)">
+          {photoPreview ? (
+            <div className="flex items-center gap-3">
+              <img src={photoPreview} alt="Bill preview" className="h-16 w-16 rounded-md border border-line object-cover" />
+              <button
+                onClick={() => {
+                  setPhoto(null)
+                  setPhotoPreview(null)
+                }}
+                className="text-xs text-rust hover:underline"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <label className="flex w-full cursor-pointer items-center justify-center rounded-md border border-dashed border-line py-3 text-sm text-ink-faint hover:bg-sage/30">
+              Tap to attach a photo of the bill
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => handlePhotoSelect(e.target.files[0])}
+              />
+            </label>
+          )}
         </Field>
 
         <button
