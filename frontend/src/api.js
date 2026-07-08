@@ -55,6 +55,10 @@ export const api = {
   listBackups: () => request('/api/backup'),
   runBackupNow: () => request('/api/backup/run', { method: 'POST' }),
   downloadBackup: (filename) => downloadFile(`/api/backup/${filename}/download`),
+
+  // Company settings
+  getCompanySettings: () => request('/api/settings/company'),
+  updateCompanySettings: (data) => request('/api/settings/company', { method: 'PUT', body: JSON.stringify(data) }),
 }
 
 async function downloadFile(path) {

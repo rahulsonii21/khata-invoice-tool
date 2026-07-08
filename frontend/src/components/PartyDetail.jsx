@@ -6,15 +6,26 @@ export default function PartyDetail({ partyId, onBack }) {
   const [party, setParty] = useState(null)
   const [invoices, setInvoices] = useState([])
   const [expandedId, setExpandedId] = useState(null)
+  const [editingParty, setEditingParty] = useState(false)
+  const [partyForm, setPartyForm] = useState({ phone: '', gstin: '' })
 
   function reload() {
-    api.getParty(partyId).then(setParty)
+    api.getParty(partyId).then((p) => {
+      setParty(p)
+      setPartyForm({ phone: p.phone || '', gstin: p.gstin || '' })
+    })
     api.listInvoices({ party_id: partyId }).then(setInvoices)
   }
 
   useEffect(() => {
     reload()
   }, [partyId])
+
+  async function savePartyDetails() {
+    await api.updateParty(partyId, { phone: partyForm.phone || null, gstin: partyForm.gstin || null })
+    setEditingParty(false)
+    reload()
+  }
 
   if (!party) return <div className="mx-auto max-w-5xl px-4 py-6 text-sm text-ink-faint">Loading…</div>
 
@@ -27,7 +38,39 @@ export default function PartyDetail({ partyId, onBack }) {
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-semibold text-ink">{party.name}</h1>
-          {party.phone && <p className="text-sm text-ink-faint">{party.phone}</p>}
+          {editingParty ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                placeholder="Phone"
+                value={partyForm.phone}
+                onChange={(e) => setPartyForm({ ...partyForm, phone: e.target.value })}
+                className="rounded-md border border-line px-2 py-1 text-sm"
+              />
+              <input
+                placeholder="GSTIN"
+                value={partyForm.gstin}
+                onChange={(e) => setPartyForm({ ...partyForm, gstin: e.target.value })}
+                className="rounded-md border border-line px-2 py-1 text-sm"
+              />
+              <button
+                onClick={savePartyDetails}
+                className="rounded-md bg-ink px-2 py-1 text-xs font-medium text-paper"
+              >
+                Save
+              </button>
+              <button onClick={() => setEditingParty(false)} className="text-xs text-ink-faint">
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="mt-1 flex items-center gap-3 text-sm text-ink-faint">
+              {party.phone && <span>{party.phone}</span>}
+              {party.gstin && <span>GSTIN: {party.gstin}</span>}
+              <button onClick={() => setEditingParty(true)} className="text-ink-light hover:text-ink">
+                Edit details
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex gap-4 text-sm">
           <MiniStat label="Invoiced" value={party.total_invoiced} />

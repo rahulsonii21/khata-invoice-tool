@@ -23,7 +23,8 @@ def export_party_pdf(party_id: str, db: Session = Depends(get_db)):
         .all()
     )
 
-    pdf_bytes = export_lib.generate_party_statement_pdf(party, invoices)
+    company_settings = db.query(models.CompanySettings).filter(models.CompanySettings.id == "default").first()
+    pdf_bytes = export_lib.generate_party_statement_pdf(party, invoices, company_settings)
     filename = f"{party.name.replace(' ', '_')}_statement_{datetime.now().strftime('%Y%m%d')}.pdf"
 
     return Response(

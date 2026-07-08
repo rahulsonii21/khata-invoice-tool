@@ -7,6 +7,7 @@ export default function PartyList({ onOpenParty }) {
   const [query, setQuery] = useState('')
   const [showNewForm, setShowNewForm] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newGstin, setNewGstin] = useState('')
 
   function reload() {
     api.listParties().then(setParties).catch(() => {})
@@ -18,8 +19,9 @@ export default function PartyList({ onOpenParty }) {
 
   async function handleCreate() {
     if (!newName.trim()) return
-    await api.createParty({ name: newName.trim() })
+    await api.createParty({ name: newName.trim(), gstin: newGstin.trim() || null })
     setNewName('')
+    setNewGstin('')
     setShowNewForm(false)
     reload()
   }
@@ -60,6 +62,13 @@ export default function PartyList({ onOpenParty }) {
             placeholder="Party name"
             className="flex-1 rounded-md border border-line px-3 py-2 text-sm"
           />
+          <input
+            value={newGstin}
+            onChange={(e) => setNewGstin(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+            placeholder="GSTIN (optional)"
+            className="w-48 rounded-md border border-line px-3 py-2 text-sm"
+          />
           <button
             onClick={handleCreate}
             className="rounded-md bg-ink px-4 py-2 text-sm font-medium text-paper hover:bg-ink-light"
@@ -81,6 +90,7 @@ export default function PartyList({ onOpenParty }) {
           <thead>
             <tr className="border-b border-line bg-sage/40 text-left text-xs font-medium text-ink-faint">
               <th className="px-4 py-2">Party</th>
+              <th className="px-4 py-2">GSTIN</th>
               <th className="px-4 py-2 text-right">Invoiced</th>
               <th className="px-4 py-2 text-right">Received</th>
               <th className="px-4 py-2 text-right">Outstanding</th>
@@ -89,7 +99,7 @@ export default function PartyList({ onOpenParty }) {
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-ink-faint">
+                <td colSpan={5} className="px-4 py-6 text-center text-ink-faint">
                   No parties yet.
                 </td>
               </tr>
@@ -101,6 +111,7 @@ export default function PartyList({ onOpenParty }) {
                 className="cursor-pointer border-b border-line last:border-0 hover:bg-sage/30"
               >
                 <td className="px-4 py-3 font-medium text-ink">{p.name}</td>
+                <td className="px-4 py-3 text-xs text-ink-faint">{p.gstin || '—'}</td>
                 <td className="px-4 py-3 text-right tabular-nums text-ink">{formatINR(p.total_invoiced)}</td>
                 <td className="px-4 py-3 text-right tabular-nums text-ink-light">
                   {formatINR(p.total_received)}

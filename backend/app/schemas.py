@@ -115,3 +115,19 @@ class OCRExtractResult(BaseModel):
     confidence: Optional[float] = None
     raw_text: Optional[str] = None
     image_url: Optional[str] = None
+
+
+# ---------- Company settings ----------
+class CompanySettingsUpdate(BaseModel):
+    company_name: Optional[str] = None
+    gstin: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class CompanySettingsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    company_name: Optional[str] = None
+    gstin: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None

@@ -4,12 +4,14 @@ import Dashboard from './components/Dashboard'
 import PartyList from './components/PartyList'
 import PartyDetail from './components/PartyDetail'
 import Backups from './components/Backups'
+import CompanySettings from './components/CompanySettings'
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'upload', label: 'Upload' },
   { id: 'parties', label: 'Parties' },
   { id: 'backups', label: 'Backups' },
+  { id: 'settings', label: 'Settings' },
 ]
 
 export default function App() {
@@ -57,6 +59,7 @@ export default function App() {
           <PartyList onOpenParty={setOpenPartyId} />
         ))}
       {tab === 'backups' && <Backups />}
+      {tab === 'settings' && <CompanySettings />}
 
       {/* Mobile bottom tab bar */}
       <div className="fixed inset-x-0 bottom-0 flex border-t border-line bg-white sm:hidden">

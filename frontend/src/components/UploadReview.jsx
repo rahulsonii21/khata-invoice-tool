@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { api } from '../api'
 import PartyAutocomplete from './PartyAutocomplete'
+import ManualEntry from './ManualEntry'
 
 let idCounter = 0
 const nextId = () => `f${++idCounter}`
@@ -14,9 +15,11 @@ const STATUS_LABEL = {
 }
 
 export default function UploadReview() {
+  const [mode, setMode] = useState('photo') // 'photo' | 'manual'
   const [queue, setQueue] = useState([])
   const [activeId, setActiveId] = useState(null)
   const [parties, setParties] = useState([])
+  const [savedCount, setSavedCount] = useState(0)
   const processingRef = useRef(false)
 
   useEffect(() => {
@@ -122,31 +125,65 @@ export default function UploadReview() {
       <header className="mb-6">
         <h1 className="font-display text-2xl font-semibold text-ink">Upload Invoices</h1>
         <p className="mt-1 text-sm text-ink-faint">
-          Drop invoice photos or scans below. Each is read automatically, then you confirm before it's saved.
+          {mode === 'photo'
+            ? "Drop invoice photos or scans below. Each is read automatically, then you confirm before it's saved."
+            : 'Enter invoice details directly - useful when a photo is unclear or unavailable.'}
         </p>
       </header>
 
-      <Dropzone onFiles={addFiles} />
+      <div className="mb-6 inline-flex rounded-md border border-line bg-white p-1">
+        <button
+          onClick={() => setMode('photo')}
+          className={`rounded px-3 py-1.5 text-sm font-medium ${
+            mode === 'photo' ? 'bg-ink text-paper' : 'text-ink-faint'
+          }`}
+        >
+          Upload photo
+        </button>
+        <button
+          onClick={() => setMode('manual')}
+          className={`rounded px-3 py-1.5 text-sm font-medium ${
+            mode === 'manual' ? 'bg-ink text-paper' : 'text-ink-faint'
+          }`}
+        >
+          Enter manually
+        </button>
+      </div>
 
-      {queue.length > 0 && (
-        <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-[280px_1fr]">
-          <QueueList queue={queue} activeId={activeId} onSelect={setActiveId} />
-          {active ? (
-            <ReviewPanel
-              key={active.id}
-              item={active}
-              parties={parties}
-              onChange={updateField}
-              onSave={() => handleSave(active)}
-            />
-          ) : (
-            <div className="flex items-center justify-center rounded-lg border border-dashed border-line bg-white/50 p-12 text-sm text-ink-faint">
-              {queue.every((f) => f.status === 'saved')
-                ? 'All invoices saved.'
-                : 'Waiting for extraction to finish…'}
-            </div>
+      {mode === 'manual' ? (
+        <div>
+          <ManualEntry onSaved={() => setSavedCount((c) => c + 1)} />
+          {savedCount > 0 && (
+            <p className="mt-3 text-center text-sm text-ink-light">
+              {savedCount} invoice{savedCount > 1 ? 's' : ''} saved this session.
+            </p>
           )}
         </div>
+      ) : (
+        <>
+          <Dropzone onFiles={addFiles} />
+
+          {queue.length > 0 && (
+            <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-[280px_1fr]">
+              <QueueList queue={queue} activeId={activeId} onSelect={setActiveId} />
+              {active ? (
+                <ReviewPanel
+                  key={active.id}
+                  item={active}
+                  parties={parties}
+                  onChange={updateField}
+                  onSave={() => handleSave(active)}
+                />
+              ) : (
+                <div className="flex items-center justify-center rounded-lg border border-dashed border-line bg-white/50 p-12 text-sm text-ink-faint">
+                  {queue.every((f) => f.status === 'saved')
+                    ? 'All invoices saved.'
+                    : 'Waiting for extraction to finish…'}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   )

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .database import Base, engine
-from .routers import parties, invoices, payments, dashboard, ocr, export, backup
+from .routers import parties, invoices, payments, dashboard, ocr, export, backup, settings
 from . import scheduler
 
 # Creates tables if they don't exist (fine for SQLite/dev;
@@ -52,6 +52,7 @@ app.include_router(dashboard.router)
 app.include_router(ocr.router)
 app.include_router(export.router)
 app.include_router(backup.router)
+app.include_router(settings.router)
 
 
 @app.get("/api/health")

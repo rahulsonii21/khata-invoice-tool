@@ -35,7 +35,7 @@ def _fmt_inr(amount):
 # ---------------------------------------------------------------------------
 # PDF - single party statement
 # ---------------------------------------------------------------------------
-def generate_party_statement_pdf(party, invoices) -> bytes:
+def generate_party_statement_pdf(party, invoices, company_settings=None) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
@@ -52,8 +52,24 @@ def generate_party_statement_pdf(party, invoices) -> bytes:
     section_style = ParagraphStyle(
         "Section", parent=styles["Heading2"], textColor=INK, fontSize=12, spaceBefore=14, spaceAfter=6,
     )
+    letterhead_style = ParagraphStyle(
+        "Letterhead", parent=styles["Normal"], textColor=INK, fontSize=9, alignment=TA_RIGHT,
+    )
 
     elements = []
+
+    # Company letterhead, right-aligned at the top, if the user has set it up
+    if company_settings and company_settings.company_name:
+        lh_lines = [f"<b>{company_settings.company_name}</b>"]
+        if company_settings.gstin:
+            lh_lines.append(f"GSTIN: {company_settings.gstin}")
+        if company_settings.address:
+            lh_lines.append(company_settings.address)
+        if company_settings.phone:
+            lh_lines.append(company_settings.phone)
+        elements.append(Paragraph("<br/>".join(lh_lines), letterhead_style))
+        elements.append(Spacer(1, 6 * mm))
+
     elements.append(Paragraph("Account Statement", title_style))
     elements.append(Paragraph(f"{party.name}", subtitle_style))
     if party.phone:

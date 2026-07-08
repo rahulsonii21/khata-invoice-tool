@@ -114,3 +114,16 @@ class AuditLog(Base):
     new_value = Column(String, nullable=True)
     changed_by = Column(String, nullable=True)  # "user" or "father" - simple text tag
     changed_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CompanySettings(Base):
+    """Singleton table (always id='default') holding the user's own business
+    details, used as the letterhead on PDF statements."""
+    __tablename__ = "company_settings"
+
+    id = Column(String, primary_key=True, default="default")
+    company_name = Column(String, nullable=True)
+    gstin = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
+    phone = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
