@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { api } from '../api'
 import PartyAutocomplete from './PartyAutocomplete'
 import ManualEntry from './ManualEntry'
+import BulkPartyUpload from './BulkPartyUpload'
 
 let idCounter = 0
 const nextId = () => `f${++idCounter}`
@@ -15,7 +16,7 @@ const STATUS_LABEL = {
 }
 
 export default function UploadReview() {
-  const [mode, setMode] = useState('photo') // 'photo' | 'manual'
+  const [mode, setMode] = useState('photo') // 'photo' | 'manual' | 'bulk'
   const [queue, setQueue] = useState([])
   const [activeId, setActiveId] = useState(null)
   const [parties, setParties] = useState([])
@@ -39,8 +40,8 @@ export default function UploadReview() {
     setQueue((q) => [...q, ...items])
   }, [])
 
-  // Sequential processing, one request at a time with a short gap,
-  // to stay well within Gemini's free-tier rate limits.
+  // Sequential processing, one request at a time, so a big batch doesn't
+  // overload the server (Tesseract OCR runs on the same machine as the API).
   useEffect(() => {
     if (processingRef.current) return
     const next = queue.find((f) => f.status === 'pending')
@@ -127,6 +128,8 @@ export default function UploadReview() {
         <p className="mt-1 text-sm text-ink-faint">
           {mode === 'photo'
             ? "Drop invoice photos or scans below. Each is read automatically, then you confirm before it's saved."
+            : mode === 'bulk'
+            ? 'Pick one party, then drop all their bills at once - review and save them together.'
             : 'Enter invoice details directly - useful when a photo is unclear or unavailable.'}
         </p>
       </header>
@@ -141,6 +144,14 @@ export default function UploadReview() {
           Upload photo
         </button>
         <button
+          onClick={() => setMode('bulk')}
+          className={`rounded px-3 py-1.5 text-sm font-medium ${
+            mode === 'bulk' ? 'bg-ink text-paper' : 'text-ink-faint'
+          }`}
+        >
+          Bulk for one party
+        </button>
+        <button
           onClick={() => setMode('manual')}
           className={`rounded px-3 py-1.5 text-sm font-medium ${
             mode === 'manual' ? 'bg-ink text-paper' : 'text-ink-faint'
@@ -150,7 +161,9 @@ export default function UploadReview() {
         </button>
       </div>
 
-      {mode === 'manual' ? (
+      {mode === 'bulk' && <BulkPartyUpload />}
+
+      {mode === 'manual' && (
         <div>
           <ManualEntry onSaved={() => setSavedCount((c) => c + 1)} />
           {savedCount > 0 && (
@@ -159,7 +172,9 @@ export default function UploadReview() {
             </p>
           )}
         </div>
-      ) : (
+      )}
+
+      {mode === 'photo' && (
         <>
           <Dropzone onFiles={addFiles} />
 

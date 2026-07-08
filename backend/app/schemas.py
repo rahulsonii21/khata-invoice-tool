@@ -112,6 +112,7 @@ class OCRExtractResult(BaseModel):
     invoice_date: Optional[str] = None
     amount: Optional[float] = None
     gst_amount: Optional[float] = None
+    gstin: Optional[str] = None
     confidence: Optional[float] = None
     raw_text: Optional[str] = None
     image_url: Optional[str] = None
