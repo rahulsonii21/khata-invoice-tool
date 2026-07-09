@@ -8,6 +8,7 @@ import CompanySettings from './components/CompanySettings'
 import GenerateBill from './components/GenerateBill'
 import Login from './components/Login'
 import { api, getToken } from './api'
+import { resolveImageUrl } from './utils'
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -23,6 +24,8 @@ export default function App() {
   const [openPartyId, setOpenPartyId] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [needsLogin, setNeedsLogin] = useState(false)
+  const [logoUrl, setLogoUrl] = useState(null)
+  const [companyName, setCompanyName] = useState(null)
 
   function checkAuth() {
     api.getAuthStatus().then((status) => {
@@ -38,6 +41,14 @@ export default function App() {
     window.addEventListener('khata-auth-required', handler)
     return () => window.removeEventListener('khata-auth-required', handler)
   }, [])
+
+  useEffect(() => {
+    if (!authChecked || needsLogin) return
+    api.getCompanySettings().then((s) => {
+      setLogoUrl(s.logo_url || null)
+      setCompanyName(s.company_name || null)
+    }).catch(() => {})
+  }, [authChecked, needsLogin])
 
   function openParty(id) {
     setOpenPartyId(id)
@@ -57,8 +68,12 @@ export default function App() {
       <nav className="border-b border-line bg-white px-4 py-3">
         <div className="mx-auto flex max-w-5xl items-center gap-4 overflow-x-auto">
           <div className="flex flex-shrink-0 items-center gap-2">
-            <span className="stamp px-2 py-0.5 text-xs font-semibold text-ink">खाता</span>
-            <span className="font-display text-lg font-semibold text-ink">Khata</span>
+            {logoUrl ? (
+              <img src={resolveImageUrl(logoUrl)} alt={companyName || 'Logo'} className="h-8 w-8 rounded object-contain" />
+            ) : (
+              <span className="stamp px-2 py-0.5 text-xs font-semibold text-ink">खाता</span>
+            )}
+            <span className="font-display text-lg font-semibold text-ink">{companyName || 'Khata'}</span>
           </div>
           <div className="hidden gap-1 sm:flex">
             {TABS.map((t) => (

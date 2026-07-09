@@ -15,7 +15,7 @@ export function formatDate(dateStr) {
 }
 
 export const STATUS_STYLES = {
-  paid: { label: 'Paid', className: 'text-ink-light bg-sage' },
+  paid: { label: 'Paid', className: 'text-leaf bg-leaf/10' },
   partially_paid: { label: 'Partial', className: 'text-marigold bg-marigold/10' },
   unpaid: { label: 'Due', className: 'text-rust bg-rust/10' },
   overdue: { label: 'Overdue', className: 'text-paper bg-rust' },

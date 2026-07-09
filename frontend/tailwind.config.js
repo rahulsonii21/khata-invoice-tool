@@ -6,14 +6,15 @@ export default {
       colors: {
         paper: '#FBFAF6',
         ink: {
-          DEFAULT: '#1F3A34',
-          light: '#3D5C54',
-          faint: '#7C9089',
+          DEFAULT: '#0B4A28',
+          light: '#2E7D52',
+          faint: '#6B8577',
         },
+        leaf: '#00A344',
         marigold: '#C98A1B',
         rust: '#A13D2B',
-        sage: '#DCE5DE',
-        line: '#D8D2C0',
+        sage: '#DCEEE0',
+        line: '#D3DBD1',
       },
       fontFamily: {
         display: ['"IBM Plex Serif"', 'serif'],
