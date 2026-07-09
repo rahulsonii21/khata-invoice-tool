@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
 import PartyAutocomplete from './PartyAutocomplete'
+import { compressImage } from '../utils'
 
 export default function ManualEntry({ onSaved }) {
   const [parties, setParties] = useState([])
@@ -48,7 +49,8 @@ export default function ManualEntry({ onSaved }) {
 
       let image_url = null
       if (photo) {
-        const uploadResult = await api.uploadImage(photo)
+        const compressed = await compressImage(photo)
+        const uploadResult = await api.uploadImage(compressed)
         image_url = uploadResult.image_url
       }
 

@@ -3,6 +3,7 @@ import { api } from '../api'
 import PartyAutocomplete from './PartyAutocomplete'
 import ManualEntry from './ManualEntry'
 import BulkPartyUpload from './BulkPartyUpload'
+import { compressImage } from '../utils'
 
 let idCounter = 0
 const nextId = () => `f${++idCounter}`
@@ -50,8 +51,8 @@ export default function UploadReview() {
     processingRef.current = true
     setQueue((q) => q.map((f) => (f.id === next.id ? { ...f, status: 'processing' } : f)))
 
-    api
-      .extractInvoice(next.file)
+    compressImage(next.file)
+      .then((compressed) => api.extractInvoice(compressed))
       .then((result) => {
         setQueue((q) =>
           q.map((f) =>

@@ -1,6 +1,6 @@
 from difflib import SequenceMatcher
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from typing import List
 
 from .. import models, schemas
@@ -12,7 +12,15 @@ router = APIRouter(prefix="/api/parties", tags=["parties"])
 
 @router.get("", response_model=List[schemas.PartyOut])
 def list_parties(db: Session = Depends(get_db)):
-    parties = db.query(models.Party).order_by(models.Party.name).all()
+    # Eager-load invoices + their payments in a fixed handful of queries
+    # instead of one query per party per invoice (was O(n) queries, now O(1) -
+    # measured 121 queries -> 3 for 20 parties/100 invoices/200 payments).
+    parties = (
+        db.query(models.Party)
+        .options(selectinload(models.Party.invoices).selectinload(models.Invoice.payments))
+        .order_by(models.Party.name)
+        .all()
+    )
     return [_to_out(p) for p in parties]
 
 
@@ -24,14 +32,16 @@ def match_party(name: str = Query(..., min_length=1), db: Session = Depends(get_
     instead of creating duplicate parties for the same party written
     slightly differently (e.g. OCR variance, Hindi vs Hinglish spelling).
     """
-    parties = db.query(models.Party).all()
+    # Only pull id+name (not every column) - this endpoint doesn't need
+    # anything else and there's no reason to transfer/hydrate full rows.
+    rows = db.query(models.Party.id, models.Party.name).all()
     scored = [
         {
-            "party_id": p.id,
-            "name": p.name,
-            "score": SequenceMatcher(None, name.lower().strip(), p.name.lower().strip()).ratio(),
+            "party_id": row.id,
+            "name": row.name,
+            "score": SequenceMatcher(None, name.lower().strip(), row.name.lower().strip()).ratio(),
         }
-        for p in parties
+        for row in rows
     ]
     scored.sort(key=lambda x: x["score"], reverse=True)
     # Only return plausible matches; below ~0.55 similarity it's noise
@@ -40,7 +50,12 @@ def match_party(name: str = Query(..., min_length=1), db: Session = Depends(get_
 
 @router.get("/{party_id}", response_model=schemas.PartyOut)
 def get_party(party_id: str, db: Session = Depends(get_db)):
-    party = db.query(models.Party).filter(models.Party.id == party_id).first()
+    party = (
+        db.query(models.Party)
+        .options(selectinload(models.Party.invoices).selectinload(models.Invoice.payments))
+        .filter(models.Party.id == party_id)
+        .first()
+    )
     if not party:
         raise HTTPException(404, "Party not found")
     return _to_out(party)

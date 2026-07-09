@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from typing import List
 
 from .. import models, schemas
@@ -10,7 +10,14 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 @router.get("/summary")
 def get_summary(db: Session = Depends(get_db)):
-    parties = db.query(models.Party).all()
+    # Eager-load invoices + payments once; every computed property below
+    # (total_invoiced, outstanding, is_overdue, etc.) then works off data
+    # already in memory instead of firing a fresh query per party/invoice.
+    parties = (
+        db.query(models.Party)
+        .options(selectinload(models.Party.invoices).selectinload(models.Invoice.payments))
+        .all()
+    )
 
     total_invoiced = sum(p.total_invoiced for p in parties)
     total_received = sum(p.total_received for p in parties)
@@ -22,25 +29,33 @@ def get_summary(db: Session = Depends(get_db)):
         reverse=True,
     )[:5]
 
-    all_invoices = db.query(models.Invoice).all()
-    overdue_invoices = [inv for inv in all_invoices if inv.is_overdue]
-    total_overdue = sum(inv.outstanding for inv in overdue_invoices)
-
+    # Reuse the same already-loaded parties/invoices instead of a second
+    # separate query for "all invoices" (which the previous version did).
     overdue_by_party = {}
-    for inv in overdue_invoices:
-        overdue_by_party.setdefault(inv.party_id, {"party_id": inv.party_id, "name": inv.party.name, "amount": 0, "count": 0})
-        overdue_by_party[inv.party_id]["amount"] += inv.outstanding
-        overdue_by_party[inv.party_id]["count"] += 1
+    total_overdue = 0
+    overdue_count = 0
+    for party in parties:
+        for inv in party.invoices:
+            if inv.is_overdue:
+                total_overdue += inv.outstanding
+                overdue_count += 1
+                bucket = overdue_by_party.setdefault(
+                    party.id, {"party_id": party.id, "name": party.name, "amount": 0, "count": 0}
+                )
+                bucket["amount"] += inv.outstanding
+                bucket["count"] += 1
     top_overdue = sorted(overdue_by_party.values(), key=lambda x: x["amount"], reverse=True)[:5]
 
     recent_payments = (
         db.query(models.Payment)
+        .options(selectinload(models.Payment.invoice).selectinload(models.Invoice.party))
         .order_by(models.Payment.created_at.desc())
         .limit(10)
         .all()
     )
     recent_invoices = (
         db.query(models.Invoice)
+        .options(selectinload(models.Invoice.party), selectinload(models.Invoice.payments))
         .order_by(models.Invoice.created_at.desc())
         .limit(10)
         .all()
@@ -51,7 +66,7 @@ def get_summary(db: Session = Depends(get_db)):
         "total_received": total_received,
         "total_outstanding": total_outstanding,
         "total_overdue": total_overdue,
-        "overdue_count": len(overdue_invoices),
+        "overdue_count": overdue_count,
         "party_count": len(parties),
         "top_outstanding_parties": top_outstanding,
         "top_overdue_parties": top_overdue,

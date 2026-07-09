@@ -60,7 +60,7 @@ def _build_company_dict(db: Session) -> dict:
             "bank_account_number": company_row.bank_account_number,
         }
         if company_row.logo_url:
-            company["logo_bytes"] = storage.read_image_bytes(company_row.logo_url)
+            company["logo_bytes"] = storage.get_cached_logo_bytes(company_row.logo_url)
     return company
 
 

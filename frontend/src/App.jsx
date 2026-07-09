@@ -1,14 +1,18 @@
-import { useState, useEffect } from 'react'
-import UploadReview from './components/UploadReview'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import Dashboard from './components/Dashboard'
 import PartyList from './components/PartyList'
 import PartyDetail from './components/PartyDetail'
-import Backups from './components/Backups'
-import CompanySettings from './components/CompanySettings'
-import GenerateBill from './components/GenerateBill'
 import Login from './components/Login'
 import { api, getToken } from './api'
 import { resolveImageUrl } from './utils'
+
+// Dashboard/Parties are what most visits actually use, so they stay in the
+// main bundle. These are opened less often - loading them on demand means
+// the initial page load doesn't pay for code nobody's using yet this visit.
+const UploadReview = lazy(() => import('./components/UploadReview'))
+const Backups = lazy(() => import('./components/Backups'))
+const CompanySettings = lazy(() => import('./components/CompanySettings'))
+const GenerateBill = lazy(() => import('./components/GenerateBill'))
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -94,17 +98,19 @@ export default function App() {
         </div>
       </nav>
 
-      {tab === 'dashboard' && <Dashboard onOpenParty={openParty} />}
-      {tab === 'upload' && <UploadReview />}
-      {tab === 'bill' && <GenerateBill />}
-      {tab === 'parties' &&
-        (openPartyId ? (
-          <PartyDetail partyId={openPartyId} onBack={() => setOpenPartyId(null)} />
-        ) : (
-          <PartyList onOpenParty={setOpenPartyId} />
-        ))}
-      {tab === 'backups' && <Backups />}
-      {tab === 'settings' && <CompanySettings />}
+      <Suspense fallback={<div className="mx-auto max-w-5xl px-4 py-6 text-sm text-ink-faint">Loading…</div>}>
+        {tab === 'dashboard' && <Dashboard onOpenParty={openParty} />}
+        {tab === 'upload' && <UploadReview />}
+        {tab === 'bill' && <GenerateBill />}
+        {tab === 'parties' &&
+          (openPartyId ? (
+            <PartyDetail partyId={openPartyId} onBack={() => setOpenPartyId(null)} />
+          ) : (
+            <PartyList onOpenParty={setOpenPartyId} />
+          ))}
+        {tab === 'backups' && <Backups />}
+        {tab === 'settings' && <CompanySettings />}
+      </Suspense>
 
       {/* Mobile bottom tab bar */}
       <div className="fixed inset-x-0 bottom-0 flex overflow-x-auto border-t border-line bg-white sm:hidden">

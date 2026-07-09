@@ -75,6 +75,42 @@ export async function shareOrDownloadFile(blob, filename, shareTitle) {
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+// Compresses/downscales an image client-side before upload. Phone camera
+// photos are often 3-8MB at 4000px+ - uploading them as-is wastes mobile
+// data, slows every upload, and bloats storage costs for no real benefit,
+// since neither OCR nor viewing the bill on screen needs that resolution.
+// Falls back to the original file if compression fails for any reason
+// (unsupported format, canvas error, etc.) rather than blocking the upload.
+export async function compressImage(file, maxDimension = 1800, quality = 0.82) {
+  if (!file.type.startsWith('image/')) return file
+
+  try {
+    const bitmap = await createImageBitmap(file)
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height))
+
+    // Don't bother re-encoding if it's already small - avoids pointless
+    // quality loss on images that don't need shrinking anyway.
+    if (scale >= 1 && file.size < 1.5 * 1024 * 1024) {
+      bitmap.close()
+      return file
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(bitmap.width * scale)
+    canvas.height = Math.round(bitmap.height * scale)
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    bitmap.close()
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality))
+    if (!blob) return file
+
+    return new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' })
+  } catch (e) {
+    return file
+  }
+}
+
 // raw_image_url is either a full Supabase URL or a relative local-disk path
 // (e.g. "/files/invoices/xxx.jpg") depending on how storage is configured.
 export function resolveImageUrl(rawUrl) {

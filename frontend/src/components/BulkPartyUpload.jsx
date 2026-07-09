@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { api } from '../api'
 import PartyAutocomplete from './PartyAutocomplete'
-import { formatINR } from '../utils'
+import { formatINR, compressImage } from '../utils'
 
 let idCounter = 0
 const nextId = () => `b${++idCounter}`
@@ -43,8 +43,8 @@ export default function BulkPartyUpload() {
     processingRef.current = true
     setQueue((q) => q.map((f) => (f.id === next.id ? { ...f, status: 'processing' } : f)))
 
-    api
-      .extractInvoice(next.file)
+    compressImage(next.file)
+      .then((compressed) => api.extractInvoice(compressed))
       .then((result) => {
         setQueue((q) =>
           q.map((f) =>

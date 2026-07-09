@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from typing import List, Optional
 
 from .. import models, schemas
@@ -15,7 +15,7 @@ def list_invoices(
     status: Optional[models.InvoiceStatus] = Query(None),
     db: Session = Depends(get_db),
 ):
-    q = db.query(models.Invoice)
+    q = db.query(models.Invoice).options(selectinload(models.Invoice.payments))
     if party_id:
         q = q.filter(models.Invoice.party_id == party_id)
     if status:
@@ -26,7 +26,12 @@ def list_invoices(
 
 @router.get("/{invoice_id}", response_model=schemas.InvoiceOut)
 def get_invoice(invoice_id: str, db: Session = Depends(get_db)):
-    invoice = db.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
+    invoice = (
+        db.query(models.Invoice)
+        .options(selectinload(models.Invoice.payments))
+        .filter(models.Invoice.id == invoice_id)
+        .first()
+    )
     if not invoice:
         raise HTTPException(404, "Invoice not found")
     return _to_out(invoice)

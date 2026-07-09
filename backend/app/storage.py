@@ -15,6 +15,8 @@ from . import supabase_client
 LOCAL_UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads" / "invoices"
 LOCAL_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
+_logo_cache = {"url": None, "bytes": None}
+
 
 def save_invoice_image(file_bytes: bytes, original_filename: str) -> str:
     ext = Path(original_filename).suffix or ".jpg"
@@ -39,12 +41,35 @@ def save_company_logo(file_bytes: bytes, original_filename: str) -> str:
 
     if supabase_client.is_configured():
         content_type = _guess_content_type(ext)
-        return supabase_client.upload_bytes(name, file_bytes, content_type)
+        url = supabase_client.upload_bytes(name, file_bytes, content_type)
+    else:
+        path = LOCAL_UPLOADS_DIR / name
+        with open(path, "wb") as f:
+            f.write(file_bytes)
+        url = f"/files/invoices/{name}"
 
-    path = LOCAL_UPLOADS_DIR / name
-    with open(path, "wb") as f:
-        f.write(file_bytes)
-    return f"/files/invoices/{name}"
+    # We already have the fresh bytes right here - update the cache directly
+    # instead of making every subsequent bill/PDF generation re-fetch the
+    # logo over the network. This also correctly invalidates any previous
+    # cached logo, which a plain URL-keyed cache wouldn't do on its own
+    # (save_company_logo reuses the same filename/URL every time it's
+    # re-uploaded, precisely so replacing a logo doesn't leave orphans).
+    _logo_cache["url"] = url
+    _logo_cache["bytes"] = file_bytes
+    return url
+
+
+def get_cached_logo_bytes(url: str) -> bytes | None:
+    """Cached accessor specifically for the company logo, which is read on
+    every single PDF export and bill generation but changes only rarely.
+    Avoids a real network round-trip to Supabase Storage on each call."""
+    if _logo_cache["url"] == url and _logo_cache["bytes"] is not None:
+        return _logo_cache["bytes"]
+    data = read_image_bytes(url)
+    if data is not None:
+        _logo_cache["url"] = url
+        _logo_cache["bytes"] = data
+    return data
 
 
 def save_generated_bill(file_bytes: bytes) -> str:
