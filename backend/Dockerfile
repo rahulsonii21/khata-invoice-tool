@@ -16,17 +16,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Swap in the higher-accuracy "best" LSTM models instead of the default
 # fast/legacy ones bundled by apt - meaningfully better recognition,
 # especially for the Hindi/Devanagari script.
+# --retry handles transient network blips during the build (seen in practice);
+# a User-Agent header avoids some CDNs' bot-blocking heuristics on bare requests.
 RUN TESSDATA_DIR=$(find / -type d -name tessdata 2>/dev/null | head -1) && \
     echo "Using tessdata dir: $TESSDATA_DIR" && \
-    curl -fsSL -o "$TESSDATA_DIR/eng.traineddata" \
+    curl -fsSL --retry 5 --retry-delay 3 -A "Mozilla/5.0 (Docker build)" \
+        -o "$TESSDATA_DIR/eng.traineddata" \
         https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/main/eng.traineddata && \
-    curl -fsSL -o "$TESSDATA_DIR/hin.traineddata" \
+    curl -fsSL --retry 5 --retry-delay 3 -A "Mozilla/5.0 (Docker build)" \
+        -o "$TESSDATA_DIR/hin.traineddata" \
         https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/main/hin.traineddata && \
     test -s "$TESSDATA_DIR/eng.traineddata" && test -s "$TESSDATA_DIR/hin.traineddata"
 
 # Devanagari-capable font, needed to render Hindi text when generating bill images
 RUN mkdir -p /app/assets/fonts && \
-    curl -fsSL -o /app/assets/fonts/NotoSansDevanagari.ttf \
+    curl -fsSL --retry 5 --retry-delay 3 -A "Mozilla/5.0 (Docker build)" \
+        -o /app/assets/fonts/NotoSansDevanagari.ttf \
         "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf" && \
     test -s /app/assets/fonts/NotoSansDevanagari.ttf
 
