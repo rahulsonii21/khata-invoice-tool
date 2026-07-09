@@ -114,6 +114,11 @@ class InvoiceOut(BaseModel):
     shipped_by: Optional[str] = None
     vehicle_number: Optional[str] = None
     driver_contact: Optional[str] = None
+    is_generated: bool = False
+    items_json: Optional[str] = None
+    cgst_pct: Optional[float] = None
+    sgst_pct: Optional[float] = None
+    igst_pct: Optional[float] = None
     status: InvoiceStatus
     created_at: datetime
     total_paid: float = 0

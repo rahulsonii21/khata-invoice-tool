@@ -74,6 +74,7 @@ export const api = {
 
   // Bill generation
   generateBill: (data) => request('/api/bills/generate', { method: 'POST', body: JSON.stringify(data) }),
+  regenerateBill: (invoiceId, data) => request(`/api/bills/${invoiceId}/regenerate`, { method: 'PUT', body: JSON.stringify(data) }),
 }
 
 async function downloadFile(path) {

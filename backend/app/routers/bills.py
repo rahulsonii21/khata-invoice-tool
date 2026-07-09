@@ -1,10 +1,11 @@
-from datetime import datetime, date as date_type
+import json
+from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .. import models, schemas, storage, bill_generator
+from .. import models, storage, bill_generator
 from ..database import get_db
 
 router = APIRouter(prefix="/api/bills", tags=["bills"])
@@ -30,12 +31,19 @@ class GenerateBillRequest(BaseModel):
     driver_contact: Optional[str] = None
 
 
-@router.post("/generate")
-def generate_bill(payload: GenerateBillRequest, db: Session = Depends(get_db)):
-    party = db.query(models.Party).filter(models.Party.id == payload.party_id).first()
-    if not party:
-        raise HTTPException(404, "Party not found")
+class RegenerateBillRequest(BaseModel):
+    bill_number: Optional[str] = None
+    bill_date: Optional[str] = None
+    items: List[BillItem]
+    cgst_pct: float = 0
+    sgst_pct: float = 0
+    igst_pct: float = 0
+    shipped_by: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    driver_contact: Optional[str] = None
 
+
+def _build_company_dict(db: Session) -> dict:
     company_row = db.query(models.CompanySettings).filter(models.CompanySettings.id == "default").first()
     company = {}
     if company_row:
@@ -50,33 +58,52 @@ def generate_bill(payload: GenerateBillRequest, db: Session = Depends(get_db)):
         }
         if company_row.logo_url:
             company["logo_bytes"] = storage.read_image_bytes(company_row.logo_url)
+    return company
 
-    bill_date_display = payload.bill_date
-    if payload.bill_date:
+
+def _render_bill(company, party, bill_number, bill_date, items, cgst_pct, sgst_pct, igst_pct,
+                  shipped_by, vehicle_number, driver_contact) -> bytes:
+    bill_date_display = bill_date
+    if bill_date:
         try:
-            d = datetime.strptime(payload.bill_date, "%Y-%m-%d").date()
+            d = datetime.strptime(bill_date, "%Y-%m-%d").date()
             bill_date_display = d.strftime("%d-%m-%Y")
         except ValueError:
             pass
 
+    return bill_generator.generate_bill_image(
+        company=company,
+        party_name=party.name,
+        bill_number=bill_number,
+        bill_date=bill_date_display,
+        items=[item.model_dump() if hasattr(item, "model_dump") else item for item in items],
+        cgst_pct=cgst_pct,
+        sgst_pct=sgst_pct,
+        igst_pct=igst_pct,
+        party_gstin=party.gstin,
+        party_address=party.address,
+        party_city=party.city,
+        party_pincode=party.pincode,
+        party_phone=party.phone,
+        shipped_by=shipped_by,
+        vehicle_number=vehicle_number,
+        driver_contact=driver_contact,
+    )
+
+
+@router.post("/generate")
+def generate_bill(payload: GenerateBillRequest, db: Session = Depends(get_db)):
+    party = db.query(models.Party).filter(models.Party.id == payload.party_id).first()
+    if not party:
+        raise HTTPException(404, "Party not found")
+
+    company = _build_company_dict(db)
+
     try:
-        image_bytes = bill_generator.generate_bill_image(
-            company=company,
-            party_name=party.name,
-            bill_number=payload.bill_number,
-            bill_date=bill_date_display,
-            items=[item.model_dump() for item in payload.items],
-            cgst_pct=payload.cgst_pct,
-            sgst_pct=payload.sgst_pct,
-            igst_pct=payload.igst_pct,
-            party_gstin=party.gstin,
-            party_address=party.address,
-            party_city=party.city,
-            party_pincode=party.pincode,
-            party_phone=party.phone,
-            shipped_by=payload.shipped_by,
-            vehicle_number=payload.vehicle_number,
-            driver_contact=payload.driver_contact,
+        image_bytes = _render_bill(
+            company, party, payload.bill_number, payload.bill_date, payload.items,
+            payload.cgst_pct, payload.sgst_pct, payload.igst_pct,
+            payload.shipped_by, payload.vehicle_number, payload.driver_contact,
         )
     except Exception as e:
         raise HTTPException(500, f"Bill generation failed: {e}")
@@ -99,9 +126,71 @@ def generate_bill(payload: GenerateBillRequest, db: Session = Depends(get_db)):
         shipped_by=payload.shipped_by,
         vehicle_number=payload.vehicle_number,
         driver_contact=payload.driver_contact,
+        is_generated=True,
+        items_json=json.dumps([item.model_dump() for item in payload.items]),
+        cgst_pct=payload.cgst_pct,
+        sgst_pct=payload.sgst_pct,
+        igst_pct=payload.igst_pct,
     )
     invoice.refresh_status()
     db.add(invoice)
+    db.commit()
+    db.refresh(invoice)
+
+    return {
+        "invoice_id": invoice.id,
+        "image_url": image_url,
+        "amount": grand_total,
+    }
+
+
+@router.put("/{invoice_id}/regenerate")
+def regenerate_bill(invoice_id: str, payload: RegenerateBillRequest, db: Session = Depends(get_db)):
+    """Re-renders an existing generated bill's image with edited items/details,
+    and updates the same invoice record (rather than creating a new one)."""
+    invoice = db.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(404, "Invoice not found")
+    if not invoice.is_generated:
+        raise HTTPException(400, "This invoice wasn't created by the bill generator, so it can't be regenerated")
+
+    party = db.query(models.Party).filter(models.Party.id == invoice.party_id).first()
+    if not party:
+        raise HTTPException(404, "Party not found")
+
+    company = _build_company_dict(db)
+
+    try:
+        image_bytes = _render_bill(
+            company, party, payload.bill_number, payload.bill_date, payload.items,
+            payload.cgst_pct, payload.sgst_pct, payload.igst_pct,
+            payload.shipped_by, payload.vehicle_number, payload.driver_contact,
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Bill regeneration failed: {e}")
+
+    try:
+        image_url = storage.save_generated_bill(image_bytes)
+    except Exception as e:
+        raise HTTPException(502, f"Could not save regenerated bill: {e}")
+
+    total_amount = sum(item.amount for item in payload.items)
+    grand_total = total_amount * (1 + (payload.cgst_pct + payload.sgst_pct + payload.igst_pct) / 100)
+
+    invoice.invoice_number = payload.bill_number
+    invoice.invoice_date = datetime.strptime(payload.bill_date, "%Y-%m-%d").date() if payload.bill_date else None
+    invoice.amount = grand_total
+    invoice.gst_amount = grand_total - total_amount if (payload.cgst_pct or payload.sgst_pct or payload.igst_pct) else None
+    invoice.raw_image_url = image_url
+    invoice.shipped_by = payload.shipped_by
+    invoice.vehicle_number = payload.vehicle_number
+    invoice.driver_contact = payload.driver_contact
+    invoice.items_json = json.dumps([item.model_dump() for item in payload.items])
+    invoice.cgst_pct = payload.cgst_pct
+    invoice.sgst_pct = payload.sgst_pct
+    invoice.igst_pct = payload.igst_pct
+    invoice.refresh_status()
+
     db.commit()
     db.refresh(invoice)
 

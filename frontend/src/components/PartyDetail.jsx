@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { formatINR, formatDate, STATUS_STYLES, resolveImageUrl } from '../utils'
+import EditGeneratedBill from './EditGeneratedBill'
 
 export default function PartyDetail({ partyId, onBack }) {
   const [party, setParty] = useState(null)
@@ -182,6 +183,7 @@ function MiniStat({ label, value, tone = 'ink' }) {
 
 function InvoiceCard({ invoice, expanded, onToggle, onChanged }) {
   const [editing, setEditing] = useState(false)
+  const [editingBill, setEditingBill] = useState(false)
   const [form, setForm] = useState({
     invoice_number: invoice.invoice_number || '',
     invoice_date: invoice.invoice_date || '',
@@ -235,7 +237,7 @@ function InvoiceCard({ invoice, expanded, onToggle, onChanged }) {
 
       {expanded && (
         <div className="mt-4 space-y-4 border-t border-line pt-4">
-          {invoice.raw_image_url && (
+          {invoice.raw_image_url && !editingBill && (
             <a
               href={resolveImageUrl(invoice.raw_image_url)}
               target="_blank"
@@ -249,7 +251,17 @@ function InvoiceCard({ invoice, expanded, onToggle, onChanged }) {
               />
             </a>
           )}
-          {editing ? (
+
+          {editingBill ? (
+            <EditGeneratedBill
+              invoice={invoice}
+              onCancel={() => setEditingBill(false)}
+              onSaved={() => {
+                setEditingBill(false)
+                onChanged()
+              }}
+            />
+          ) : editing ? (
             <div className="grid grid-cols-2 gap-3">
               <LabeledInput
                 label="Invoice number"
@@ -290,14 +302,30 @@ function InvoiceCard({ invoice, expanded, onToggle, onChanged }) {
             </div>
           ) : (
             <div className="flex items-center justify-between">
-              {invoice.remarks && <p className="text-sm text-ink-faint">Note: {invoice.remarks}</p>}
+              <div>
+                {invoice.remarks && <p className="text-sm text-ink-faint">Note: {invoice.remarks}</p>}
+                {invoice.is_generated && (invoice.shipped_by || invoice.vehicle_number) && (
+                  <p className="text-xs text-ink-faint">
+                    {[invoice.shipped_by, invoice.vehicle_number, invoice.driver_contact].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+              </div>
               <div className="ml-auto flex gap-3">
-                <button
-                  onClick={() => setEditing(true)}
-                  className="text-xs font-medium text-ink-light hover:text-ink"
-                >
-                  Edit invoice
-                </button>
+                {invoice.is_generated ? (
+                  <button
+                    onClick={() => setEditingBill(true)}
+                    className="text-xs font-medium text-ink-light hover:text-ink"
+                  >
+                    Edit bill
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setEditing(true)}
+                    className="text-xs font-medium text-ink-light hover:text-ink"
+                  >
+                    Edit invoice
+                  </button>
+                )}
                 <button
                   onClick={deleteThisInvoice}
                   className="text-xs font-medium text-rust hover:underline"

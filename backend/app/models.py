@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, date
 from sqlalchemy import (
-    Column, String, Float, Date, DateTime, ForeignKey, Text, Enum as SAEnum
+    Column, String, Float, Date, DateTime, ForeignKey, Text, Enum as SAEnum, Boolean
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -71,6 +71,11 @@ class Invoice(Base):
     shipped_by = Column(String, nullable=True)
     vehicle_number = Column(String, nullable=True)
     driver_contact = Column(String, nullable=True)
+    is_generated = Column(Boolean, default=False)  # True if created via the bill generator, not OCR/manual
+    items_json = Column(Text, nullable=True)  # stores the item breakdown for generated bills, so they're re-editable
+    cgst_pct = Column(Float, nullable=True)
+    sgst_pct = Column(Float, nullable=True)
+    igst_pct = Column(Float, nullable=True)
     status = Column(SAEnum(InvoiceStatus), default=InvoiceStatus.unpaid)
     created_at = Column(DateTime, default=datetime.utcnow)
 

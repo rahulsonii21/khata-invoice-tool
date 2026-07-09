@@ -32,6 +32,11 @@ ensure_columns_exist("invoices", {
     "shipped_by": "VARCHAR",
     "vehicle_number": "VARCHAR",
     "driver_contact": "VARCHAR",
+    "is_generated": "BOOLEAN DEFAULT FALSE",
+    "items_json": "TEXT",
+    "cgst_pct": "FLOAT",
+    "sgst_pct": "FLOAT",
+    "igst_pct": "FLOAT",
 })
 
 UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
