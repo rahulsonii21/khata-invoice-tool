@@ -148,6 +148,15 @@ function InvoiceCard({ invoice, expanded, onToggle, onChanged }) {
     onChanged()
   }
 
+  async function deleteThisInvoice() {
+    const paymentWarning = invoice.payments.length > 0
+      ? ` This will also delete its ${invoice.payments.length} payment${invoice.payments.length > 1 ? 's' : ''}.`
+      : ''
+    if (!confirm(`Delete this invoice permanently?${paymentWarning}`)) return
+    await api.deleteInvoice(invoice.id)
+    onChanged()
+  }
+
   return (
     <div className="torn-edge rounded-lg border border-line bg-white p-4">
       <div className="flex cursor-pointer items-center justify-between" onClick={onToggle}>
@@ -226,12 +235,20 @@ function InvoiceCard({ invoice, expanded, onToggle, onChanged }) {
           ) : (
             <div className="flex items-center justify-between">
               {invoice.remarks && <p className="text-sm text-ink-faint">Note: {invoice.remarks}</p>}
-              <button
-                onClick={() => setEditing(true)}
-                className="ml-auto text-xs font-medium text-ink-light hover:text-ink"
-              >
-                Edit invoice
-              </button>
+              <div className="ml-auto flex gap-3">
+                <button
+                  onClick={() => setEditing(true)}
+                  className="text-xs font-medium text-ink-light hover:text-ink"
+                >
+                  Edit invoice
+                </button>
+                <button
+                  onClick={deleteThisInvoice}
+                  className="text-xs font-medium text-rust hover:underline"
+                >
+                  Delete invoice
+                </button>
+              </div>
             </div>
           )}
 
