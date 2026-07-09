@@ -8,6 +8,7 @@ export default function ManualEntry({ onSaved }) {
     party_name: '',
     invoice_number: '',
     invoice_date: '',
+    due_date: '',
     amount: '',
     gst_amount: '',
     remarks: '',
@@ -55,6 +56,7 @@ export default function ManualEntry({ onSaved }) {
         party_id: party.id,
         invoice_number: form.invoice_number || null,
         invoice_date: form.invoice_date || null,
+        due_date: form.due_date || null,
         amount: parseFloat(form.amount),
         gst_amount: form.gst_amount ? parseFloat(form.gst_amount) : null,
         remarks: form.remarks || null,
@@ -66,6 +68,7 @@ export default function ManualEntry({ onSaved }) {
         party_name: '',
         invoice_number: '',
         invoice_date: '',
+        due_date: '',
         amount: '',
         gst_amount: '',
         remarks: '',
@@ -109,6 +112,14 @@ export default function ManualEntry({ onSaved }) {
               className="w-full rounded-md border border-line px-3 py-2 text-sm"
               value={form.invoice_date}
               onChange={(e) => update('invoice_date', e.target.value)}
+            />
+          </Field>
+          <Field label="Due date (optional)">
+            <input
+              type="date"
+              className="w-full rounded-md border border-line px-3 py-2 text-sm"
+              value={form.due_date}
+              onChange={(e) => update('due_date', e.target.value)}
             />
           </Field>
           <Field label="Amount">

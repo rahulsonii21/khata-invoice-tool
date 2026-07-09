@@ -20,11 +20,30 @@ export default function Dashboard({ onOpenParty }) {
         <p className="mt-1 text-sm text-ink-faint">Everything owed, at a glance.</p>
       </header>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <StatCard label="Total invoiced" value={summary.total_invoiced} />
         <StatCard label="Total received" value={summary.total_received} tone="ink-light" />
         <StatCard label="Outstanding" value={summary.total_outstanding} tone="rust" />
+        <StatCard label="Overdue" value={summary.total_overdue} tone="rust" sublabel={`${summary.overdue_count} invoice${summary.overdue_count !== 1 ? 's' : ''}`} />
       </div>
+
+      {summary.top_overdue_parties?.length > 0 && (
+        <section className="mt-6 rounded-lg border border-rust/30 bg-rust/5 p-4">
+          <h2 className="font-display text-base font-semibold text-rust">Needs follow-up (overdue)</h2>
+          <ul className="mt-3 space-y-2">
+            {summary.top_overdue_parties.map((p) => (
+              <li
+                key={p.party_id}
+                onClick={() => onOpenParty(p.party_id)}
+                className="flex cursor-pointer items-center justify-between rounded-md px-2 py-2 text-sm hover:bg-white"
+              >
+                <span className="text-ink">{p.name} <span className="text-xs text-ink-faint">({p.count} overdue)</span></span>
+                <span className="tabular-nums font-medium text-rust">{formatINR(p.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
         <section className="rounded-lg border border-line bg-white p-4">
@@ -69,7 +88,7 @@ export default function Dashboard({ onOpenParty }) {
             <li className="py-2 text-sm text-ink-faint">No invoices uploaded yet.</li>
           )}
           {summary.recent_invoices.map((inv) => {
-            const s = STATUS_STYLES[inv.status] || STATUS_STYLES.unpaid
+            const s = inv.is_overdue ? STATUS_STYLES.overdue : (STATUS_STYLES[inv.status] || STATUS_STYLES.unpaid)
             return (
               <li key={inv.id} className="flex items-center justify-between py-2 text-sm">
                 <div>
@@ -91,7 +110,7 @@ export default function Dashboard({ onOpenParty }) {
   )
 }
 
-function StatCard({ label, value, tone = 'ink' }) {
+function StatCard({ label, value, tone = 'ink', sublabel }) {
   const toneClass = { ink: 'text-ink', 'ink-light': 'text-ink-light', rust: 'text-rust' }[tone]
   return (
     <div className="rounded-lg border border-line bg-white p-4">
@@ -99,6 +118,7 @@ function StatCard({ label, value, tone = 'ink' }) {
       <p className={`mt-1 font-display text-2xl font-semibold tabular-nums ${toneClass}`}>
         {formatINR(value)}
       </p>
+      {sublabel && <p className="mt-0.5 text-xs text-ink-faint">{sublabel}</p>}
     </div>
   )
 }

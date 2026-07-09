@@ -179,7 +179,10 @@ def generate_bill_image(
 
         if i < len(items):
             item = items[i]
-            draw.text((col_x[0] + 10, y + 10), str(item.get("description", "")), font=f_table_cell, fill=INK)
+            desc_text = str(item.get("description", ""))
+            if item.get("hsn_code"):
+                desc_text += f"  (HSN: {item['hsn_code']})"
+            draw.text((col_x[0] + 10, y + 10), desc_text, font=f_table_cell, fill=INK)
             draw.text((col_x[1] + 10, y + 10), str(item.get("qty_label", "")), font=f_table_cell, fill=INK)
             rate_text = _fmt_amount(item.get("rate"))
             draw.text((col_x[2] + 10, y + 10), rate_text, font=f_table_cell, fill=INK)

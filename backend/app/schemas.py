@@ -78,6 +78,7 @@ class InvoiceCreate(BaseModel):
     party_id: str
     invoice_number: Optional[str] = None
     invoice_date: Optional[date] = None
+    due_date: Optional[date] = None
     amount: float
     gst_amount: Optional[float] = None
     raw_image_url: Optional[str] = None
@@ -91,6 +92,7 @@ class InvoiceCreate(BaseModel):
 class InvoiceUpdate(BaseModel):
     invoice_number: Optional[str] = None
     invoice_date: Optional[date] = None
+    due_date: Optional[date] = None
     amount: Optional[float] = None
     gst_amount: Optional[float] = None
     remarks: Optional[str] = None
@@ -106,6 +108,8 @@ class InvoiceOut(BaseModel):
     party_id: str
     invoice_number: Optional[str] = None
     invoice_date: Optional[date] = None
+    due_date: Optional[date] = None
+    is_overdue: bool = False
     amount: float
     gst_amount: Optional[float] = None
     raw_image_url: Optional[str] = None
@@ -154,6 +158,7 @@ class CompanySettingsUpdate(BaseModel):
     bank_name: Optional[str] = None
     bank_ifsc: Optional[str] = None
     bank_account_number: Optional[str] = None
+    default_credit_days: Optional[float] = None
 
 
 class CompanySettingsOut(BaseModel):
@@ -166,3 +171,4 @@ class CompanySettingsOut(BaseModel):
     bank_name: Optional[str] = None
     bank_ifsc: Optional[str] = None
     bank_account_number: Optional[str] = None
+    default_credit_days: Optional[float] = None

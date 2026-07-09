@@ -38,7 +38,18 @@ def create_invoice(payload: schemas.InvoiceCreate, db: Session = Depends(get_db)
     if not party:
         raise HTTPException(404, "Party not found - create the party first")
 
-    invoice = models.Invoice(**payload.model_dump())
+    data = payload.model_dump()
+
+    # Auto-fill due_date from the company's default credit terms, if the
+    # caller didn't specify one explicitly and we have both an invoice date
+    # and a configured default.
+    if not data.get("due_date") and data.get("invoice_date"):
+        company = db.query(models.CompanySettings).filter(models.CompanySettings.id == "default").first()
+        if company and company.default_credit_days:
+            from datetime import timedelta
+            data["due_date"] = data["invoice_date"] + timedelta(days=int(company.default_credit_days))
+
+    invoice = models.Invoice(**data)
     invoice.refresh_status()
     db.add(invoice)
     db.commit()
@@ -82,6 +93,8 @@ def _to_out(invoice: models.Invoice) -> schemas.InvoiceOut:
         party_id=invoice.party_id,
         invoice_number=invoice.invoice_number,
         invoice_date=invoice.invoice_date,
+        due_date=invoice.due_date,
+        is_overdue=invoice.is_overdue,
         amount=invoice.amount,
         gst_amount=invoice.gst_amount,
         raw_image_url=invoice.raw_image_url,

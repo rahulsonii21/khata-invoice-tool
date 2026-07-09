@@ -7,8 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .database import Base, engine, ensure_columns_exist
-from .routers import parties, invoices, payments, dashboard, ocr, export, backup, settings, uploads, bills
-from . import scheduler
+from .routers import parties, invoices, payments, dashboard, ocr, export, backup, settings, uploads, bills, auth_router
+from . import scheduler, auth
 
 # Creates tables if they don't exist (fine for SQLite/dev;
 # use Alembic migrations later once schema stabilizes in production).
@@ -21,6 +21,7 @@ ensure_columns_exist("company_settings", {
     "bank_name": "VARCHAR",
     "bank_ifsc": "VARCHAR",
     "bank_account_number": "VARCHAR",
+    "default_credit_days": "FLOAT",
 })
 ensure_columns_exist("parties", {
     "address": "TEXT",
@@ -37,6 +38,7 @@ ensure_columns_exist("invoices", {
     "cgst_pct": "FLOAT",
     "sgst_pct": "FLOAT",
     "igst_pct": "FLOAT",
+    "due_date": "DATE",
 })
 
 UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
@@ -51,6 +53,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Invoice Management Tool API", lifespan=lifespan)
+
+# AuthMiddleware is added BEFORE CORSMiddleware so that CORS ends up as the
+# outermost layer (Starlette wraps in reverse order of add_middleware calls).
+# This matters: without it, a 401 response from AuthMiddleware could be sent
+# without CORS headers, which browsers then report as an opaque "failed to
+# fetch" rather than a readable 401 - the same class of bug seen earlier with
+# the Supabase bucket error before that was fixed to fail gracefully.
+app.add_middleware(auth.AuthMiddleware)
 
 # Set ALLOWED_ORIGINS to your Vercel URL(s) in production, e.g.
 # ALLOWED_ORIGINS=https://khata.vercel.app
@@ -80,6 +90,7 @@ app.include_router(backup.router)
 app.include_router(settings.router)
 app.include_router(uploads.router)
 app.include_router(bills.router)
+app.include_router(auth_router.router)
 
 
 @app.get("/api/health")

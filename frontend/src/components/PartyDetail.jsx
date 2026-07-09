@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api'
-import { formatINR, formatDate, STATUS_STYLES, resolveImageUrl } from '../utils'
+import { api, fetchFileBlob } from '../api'
+import { formatINR, formatDate, STATUS_STYLES, getStatusStyle, resolveImageUrl, openWhatsAppMessage, shareOrDownloadFile } from '../utils'
 import EditGeneratedBill from './EditGeneratedBill'
 
 export default function PartyDetail({ partyId, onBack }) {
@@ -136,7 +136,7 @@ export default function PartyDetail({ partyId, onBack }) {
         </div>
       </header>
 
-      <div className="mb-6 flex gap-2">
+      <div className="mb-6 flex flex-wrap gap-2">
         <button
           onClick={() => api.downloadPartyPdf(party.id)}
           className="rounded-md border border-ink/30 px-3 py-1.5 text-xs font-medium text-ink hover:bg-sage"
@@ -149,6 +149,28 @@ export default function PartyDetail({ partyId, onBack }) {
         >
           Export Excel
         </button>
+        <button
+          onClick={async () => {
+            const { blob, filename } = await fetchFileBlob(`/api/export/party/${party.id}/pdf`)
+            await shareOrDownloadFile(blob, filename, `Statement for ${party.name}`)
+          }}
+          className="rounded-md border border-ink/30 px-3 py-1.5 text-xs font-medium text-ink hover:bg-sage"
+        >
+          Share statement
+        </button>
+        {party.outstanding > 0 && party.phone && (
+          <button
+            onClick={() =>
+              openWhatsAppMessage(
+                party.phone,
+                `Namaste ${party.name}, aapka ${formatINR(party.outstanding)} bakaya hai. Kripya jald bhugtan karein. Dhanyawad.`
+              )
+            }
+            className="rounded-md border border-marigold/40 bg-marigold/10 px-3 py-1.5 text-xs font-medium text-marigold hover:bg-marigold/20"
+          >
+            Send payment reminder
+          </button>
+        )}
       </div>
 
       <div className="space-y-3">
@@ -187,17 +209,19 @@ function InvoiceCard({ invoice, expanded, onToggle, onChanged }) {
   const [form, setForm] = useState({
     invoice_number: invoice.invoice_number || '',
     invoice_date: invoice.invoice_date || '',
+    due_date: invoice.due_date || '',
     amount: invoice.amount,
     remarks: invoice.remarks || '',
   })
   const [addingPayment, setAddingPayment] = useState(false)
 
-  const s = STATUS_STYLES[invoice.status] || STATUS_STYLES.unpaid
+  const s = getStatusStyle(invoice)
 
   async function saveEdit() {
     await api.updateInvoice(invoice.id, {
       invoice_number: form.invoice_number || null,
       invoice_date: form.invoice_date || null,
+      due_date: form.due_date || null,
       amount: parseFloat(form.amount),
       remarks: form.remarks || null,
       changed_by: 'user',
@@ -224,7 +248,10 @@ function InvoiceCard({ invoice, expanded, onToggle, onChanged }) {
             <p className="text-sm font-medium text-ink">
               {invoice.invoice_number ? `#${invoice.invoice_number}` : 'No invoice number'}
             </p>
-            <p className="text-xs text-ink-faint">{formatDate(invoice.invoice_date)}</p>
+            <p className="text-xs text-ink-faint">
+              {formatDate(invoice.invoice_date)}
+              {invoice.due_date && ` · due ${formatDate(invoice.due_date)}`}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -273,6 +300,12 @@ function InvoiceCard({ invoice, expanded, onToggle, onChanged }) {
                 type="date"
                 value={form.invoice_date}
                 onChange={(v) => setForm({ ...form, invoice_date: v })}
+              />
+              <LabeledInput
+                label="Due date"
+                type="date"
+                value={form.due_date}
+                onChange={(v) => setForm({ ...form, due_date: v })}
               />
               <LabeledInput
                 label="Amount"

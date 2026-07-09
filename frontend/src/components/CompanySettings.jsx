@@ -5,7 +5,7 @@ import { resolveImageUrl } from '../utils'
 export default function CompanySettings() {
   const [form, setForm] = useState({
     company_name: '', gstin: '', address: '', phone: '',
-    bank_name: '', bank_ifsc: '', bank_account_number: '',
+    bank_name: '', bank_ifsc: '', bank_account_number: '', default_credit_days: '',
   })
   const [logoUrl, setLogoUrl] = useState(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -22,6 +22,7 @@ export default function CompanySettings() {
         bank_name: s.bank_name || '',
         bank_ifsc: s.bank_ifsc || '',
         bank_account_number: s.bank_account_number || '',
+        default_credit_days: s.default_credit_days ?? '',
       })
       setLogoUrl(s.logo_url || null)
     })
@@ -39,7 +40,10 @@ export default function CompanySettings() {
   async function handleSave() {
     setSaving(true)
     try {
-      await api.updateCompanySettings(form)
+      await api.updateCompanySettings({
+        ...form,
+        default_credit_days: form.default_credit_days ? parseFloat(form.default_credit_days) : null,
+      })
       setSaved(true)
     } finally {
       setSaving(false)
@@ -115,6 +119,15 @@ export default function CompanySettings() {
             className="w-full rounded-md border border-line px-3 py-2 text-sm"
             value={form.phone}
             onChange={(e) => update('phone', e.target.value)}
+          />
+        </Field>
+        <Field label="Default credit days (auto-fills due dates on new invoices)">
+          <input
+            type="number"
+            placeholder="e.g. 15"
+            className="w-full rounded-md border border-line px-3 py-2 text-sm"
+            value={form.default_credit_days}
+            onChange={(e) => update('default_credit_days', e.target.value)}
           />
         </Field>
 

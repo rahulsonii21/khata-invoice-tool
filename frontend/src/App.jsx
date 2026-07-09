@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import UploadReview from './components/UploadReview'
 import Dashboard from './components/Dashboard'
 import PartyList from './components/PartyList'
@@ -6,6 +6,8 @@ import PartyDetail from './components/PartyDetail'
 import Backups from './components/Backups'
 import CompanySettings from './components/CompanySettings'
 import GenerateBill from './components/GenerateBill'
+import Login from './components/Login'
+import { api, getToken } from './api'
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -19,10 +21,35 @@ const TABS = [
 export default function App() {
   const [tab, setTab] = useState('dashboard')
   const [openPartyId, setOpenPartyId] = useState(null)
+  const [authChecked, setAuthChecked] = useState(false)
+  const [needsLogin, setNeedsLogin] = useState(false)
+
+  function checkAuth() {
+    api.getAuthStatus().then((status) => {
+      setNeedsLogin(status.required && !getToken())
+      setAuthChecked(true)
+    })
+  }
+
+  useEffect(() => {
+    checkAuth()
+    // Any 401 anywhere in the app re-triggers the login screen
+    const handler = () => setNeedsLogin(true)
+    window.addEventListener('khata-auth-required', handler)
+    return () => window.removeEventListener('khata-auth-required', handler)
+  }, [])
 
   function openParty(id) {
     setOpenPartyId(id)
     setTab('parties')
+  }
+
+  if (!authChecked) {
+    return <div className="flex min-h-screen items-center justify-center bg-paper text-sm text-ink-faint">Loading…</div>
+  }
+
+  if (needsLogin) {
+    return <Login onSuccess={() => setNeedsLogin(false)} />
   }
 
   return (

@@ -63,6 +63,7 @@ class Invoice(Base):
     party_id = Column(UUID(as_uuid=False), ForeignKey("parties.id"), nullable=False)
     invoice_number = Column(String, nullable=True)
     invoice_date = Column(Date, nullable=True)
+    due_date = Column(Date, nullable=True)
     amount = Column(Float, nullable=False, default=0.0)
     gst_amount = Column(Float, nullable=True)
     raw_image_url = Column(String, nullable=True)
@@ -89,6 +90,12 @@ class Invoice(Base):
     @property
     def outstanding(self):
         return self.amount - self.total_paid
+
+    @property
+    def is_overdue(self):
+        if self.outstanding <= 0 or not self.due_date:
+            return False
+        return self.due_date < date.today()
 
     def refresh_status(self):
         paid = self.total_paid
@@ -142,4 +149,5 @@ class CompanySettings(Base):
     bank_name = Column(String, nullable=True)
     bank_ifsc = Column(String, nullable=True)
     bank_account_number = Column(String, nullable=True)
+    default_credit_days = Column(Float, nullable=True)  # auto-fills due_date on new invoices when set
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

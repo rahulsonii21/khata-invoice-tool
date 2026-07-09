@@ -1,10 +1,30 @@
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const TOKEN_KEY = 'khata_token'
+
+export function getToken() {
+  return localStorage.getItem(TOKEN_KEY)
+}
+export function setToken(token) {
+  localStorage.setItem(TOKEN_KEY, token)
+}
+export function clearToken() {
+  localStorage.removeItem(TOKEN_KEY)
+}
 
 async function request(path, options = {}) {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' },
-    ...options,
-  })
+  const token = getToken()
+  const headers = options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const res = await fetch(`${BASE_URL}${path}`, { headers, ...options })
+
+  if (res.status === 401) {
+    // Session expired or invalid - clear it and force back to the login screen
+    clearToken()
+    window.dispatchEvent(new Event('khata-auth-required'))
+    throw new Error('Session expired - please log in again')
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => '')
     throw new Error(`${res.status} ${res.statusText}: ${text}`)
@@ -75,10 +95,36 @@ export const api = {
   // Bill generation
   generateBill: (data) => request('/api/bills/generate', { method: 'POST', body: JSON.stringify(data) }),
   regenerateBill: (invoiceId, data) => request(`/api/bills/${invoiceId}/regenerate`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  // Auth
+  getAuthStatus: () => fetch(`${BASE_URL}/api/auth/status`).then((r) => r.json()),
+  login: (pin) =>
+    fetch(`${BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin }),
+    }).then(async (r) => {
+      if (!r.ok) throw new Error('Incorrect PIN')
+      return r.json()
+    }),
+}
+
+export async function fetchFileBlob(path) {
+  const token = getToken()
+  const headers = token ? { Authorization: `Bearer ${token}` } : {}
+  const res = await fetch(`${BASE_URL}${path}`, { headers })
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  const disposition = res.headers.get('Content-Disposition') || ''
+  const match = disposition.match(/filename="(.+)"/)
+  const filename = match ? match[1] : 'file'
+  const blob = await res.blob()
+  return { blob, filename }
 }
 
 async function downloadFile(path) {
-  const res = await fetch(`${BASE_URL}${path}`)
+  const token = getToken()
+  const headers = token ? { Authorization: `Bearer ${token}` } : {}
+  const res = await fetch(`${BASE_URL}${path}`, { headers })
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
 
   const disposition = res.headers.get('Content-Disposition') || ''

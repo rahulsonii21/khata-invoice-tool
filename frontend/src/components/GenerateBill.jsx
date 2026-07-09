@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
 import PartyAutocomplete from './PartyAutocomplete'
-import { resolveImageUrl } from '../utils'
+import { resolveImageUrl, shareOrDownloadFile } from '../utils'
 
 let rowId = 0
 const nextRowId = () => `row${++rowId}`
@@ -11,7 +11,8 @@ export default function GenerateBill() {
   const [partyName, setPartyName] = useState('')
   const [billNumber, setBillNumber] = useState('')
   const [billDate, setBillDate] = useState(new Date().toISOString().slice(0, 10))
-  const [items, setItems] = useState([{ id: nextRowId(), description: '', qty_label: '', rate: '', amount: '' }])
+  const [dueDate, setDueDate] = useState('')
+  const [items, setItems] = useState([{ id: nextRowId(), description: '', qty_label: '', rate: '', amount: '', hsn_code: '' }])
   const [cgstPct, setCgstPct] = useState('')
   const [sgstPct, setSgstPct] = useState('')
   const [igstPct, setIgstPct] = useState('')
@@ -31,7 +32,7 @@ export default function GenerateBill() {
   }
 
   function addRow() {
-    setItems((rows) => [...rows, { id: nextRowId(), description: '', qty_label: '', rate: '', amount: '' }])
+    setItems((rows) => [...rows, { id: nextRowId(), description: '', qty_label: '', rate: '', amount: '', hsn_code: '' }])
   }
 
   function removeRow(id) {
@@ -66,11 +67,13 @@ export default function GenerateBill() {
         party_id: party.id,
         bill_number: billNumber || null,
         bill_date: billDate || null,
+        due_date: dueDate || null,
         items: validItems.map((r) => ({
           description: r.description,
           qty_label: r.qty_label,
           rate: r.rate ? parseFloat(r.rate) : null,
           amount: parseFloat(r.amount),
+          hsn_code: r.hsn_code || null,
         })),
         cgst_pct: parseFloat(cgstPct) || 0,
         sgst_pct: parseFloat(sgstPct) || 0,
@@ -90,7 +93,8 @@ export default function GenerateBill() {
   function startNewBill() {
     setResult(null)
     setBillNumber('')
-    setItems([{ id: nextRowId(), description: '', qty_label: '', rate: '', amount: '' }])
+    setDueDate('')
+    setItems([{ id: nextRowId(), description: '', qty_label: '', rate: '', amount: '', hsn_code: '' }])
     setCgstPct('')
     setSgstPct('')
     setIgstPct('')
@@ -115,7 +119,7 @@ export default function GenerateBill() {
           className="w-full rounded-lg border border-line"
         />
 
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
           <a
             href={resolveImageUrl(result.image_url)}
             download
@@ -123,6 +127,16 @@ export default function GenerateBill() {
           >
             Download JPG
           </a>
+          <button
+            onClick={async () => {
+              const res = await fetch(resolveImageUrl(result.image_url))
+              const blob = await res.blob()
+              await shareOrDownloadFile(blob, `bill_${billNumber || 'khata'}.jpg`, `Bill for ${partyName}`)
+            }}
+            className="rounded-md border border-ink/30 px-4 py-2 text-sm font-medium text-ink hover:bg-sage"
+          >
+            Share
+          </button>
           <button
             onClick={startNewBill}
             className="rounded-md border border-line px-4 py-2 text-sm text-ink-faint hover:bg-sage/30"
@@ -150,7 +164,7 @@ export default function GenerateBill() {
           <PartyAutocomplete value={partyName} onChange={setPartyName} parties={parties} />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <Field label="Bill number">
             <input
               value={billNumber}
@@ -166,45 +180,63 @@ export default function GenerateBill() {
               className="w-full rounded-md border border-line px-3 py-2 text-sm"
             />
           </Field>
+          <Field label="Due date (optional)">
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full rounded-md border border-line px-3 py-2 text-sm"
+            />
+          </Field>
         </div>
 
         <div>
           <p className="mb-2 text-xs font-medium text-ink-faint">Items</p>
           <div className="space-y-2">
             {items.map((row) => (
-              <div key={row.id} className="grid grid-cols-12 gap-2">
-                <input
-                  placeholder="Description"
-                  value={row.description}
-                  onChange={(e) => updateItem(row.id, 'description', e.target.value)}
-                  className="col-span-5 rounded-md border border-line px-2 py-1.5 text-sm"
-                />
-                <input
-                  placeholder="Qty (e.g. 10 bag)"
-                  value={row.qty_label}
-                  onChange={(e) => updateItem(row.id, 'qty_label', e.target.value)}
-                  className="col-span-3 rounded-md border border-line px-2 py-1.5 text-sm"
-                />
-                <input
-                  type="number"
-                  placeholder="Rate"
-                  value={row.rate}
-                  onChange={(e) => updateItem(row.id, 'rate', e.target.value)}
-                  className="col-span-2 rounded-md border border-line px-2 py-1.5 text-sm tabular-nums"
-                />
-                <input
-                  type="number"
-                  placeholder="Amount"
-                  value={row.amount}
-                  onChange={(e) => updateItem(row.id, 'amount', e.target.value)}
-                  className="col-span-1 rounded-md border border-line px-2 py-1.5 text-sm tabular-nums"
-                />
-                <button
-                  onClick={() => removeRow(row.id)}
-                  className="col-span-1 text-xs text-ink-faint hover:text-rust"
-                >
-                  ✕
-                </button>
+              <div key={row.id} className="rounded-md border border-line p-2">
+                <div className="grid grid-cols-12 gap-2">
+                  <input
+                    placeholder="Description"
+                    value={row.description}
+                    onChange={(e) => updateItem(row.id, 'description', e.target.value)}
+                    className="col-span-6 rounded-md border border-line px-2 py-1.5 text-sm"
+                  />
+                  <input
+                    placeholder="Qty (e.g. 10 bag)"
+                    value={row.qty_label}
+                    onChange={(e) => updateItem(row.id, 'qty_label', e.target.value)}
+                    className="col-span-3 rounded-md border border-line px-2 py-1.5 text-sm"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Rate"
+                    value={row.rate}
+                    onChange={(e) => updateItem(row.id, 'rate', e.target.value)}
+                    className="col-span-2 rounded-md border border-line px-2 py-1.5 text-sm tabular-nums"
+                  />
+                  <button
+                    onClick={() => removeRow(row.id)}
+                    className="col-span-1 text-xs text-ink-faint hover:text-rust"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="mt-2 grid grid-cols-12 gap-2">
+                  <input
+                    placeholder="HSN/SAC code (optional)"
+                    value={row.hsn_code}
+                    onChange={(e) => updateItem(row.id, 'hsn_code', e.target.value)}
+                    className="col-span-6 rounded-md border border-line px-2 py-1.5 text-xs"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Amount"
+                    value={row.amount}
+                    onChange={(e) => updateItem(row.id, 'amount', e.target.value)}
+                    className="col-span-6 rounded-md border border-line px-2 py-1.5 text-sm tabular-nums"
+                  />
+                </div>
               </div>
             ))}
           </div>

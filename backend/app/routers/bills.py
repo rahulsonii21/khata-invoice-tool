@@ -16,12 +16,14 @@ class BillItem(BaseModel):
     qty_label: str = ""
     rate: Optional[float] = None
     amount: float
+    hsn_code: Optional[str] = None
 
 
 class GenerateBillRequest(BaseModel):
     party_id: str
     bill_number: Optional[str] = None
     bill_date: Optional[str] = None  # YYYY-MM-DD
+    due_date: Optional[str] = None  # YYYY-MM-DD
     items: List[BillItem]
     cgst_pct: float = 0
     sgst_pct: float = 0
@@ -34,6 +36,7 @@ class GenerateBillRequest(BaseModel):
 class RegenerateBillRequest(BaseModel):
     bill_number: Optional[str] = None
     bill_date: Optional[str] = None
+    due_date: Optional[str] = None
     items: List[BillItem]
     cgst_pct: float = 0
     sgst_pct: float = 0
@@ -116,10 +119,19 @@ def generate_bill(payload: GenerateBillRequest, db: Session = Depends(get_db)):
     total_amount = sum(item.amount for item in payload.items)
     grand_total = total_amount * (1 + (payload.cgst_pct + payload.sgst_pct + payload.igst_pct) / 100)
 
+    invoice_date = datetime.strptime(payload.bill_date, "%Y-%m-%d").date() if payload.bill_date else None
+    due_date = datetime.strptime(payload.due_date, "%Y-%m-%d").date() if payload.due_date else None
+    if not due_date and invoice_date:
+        company_row = db.query(models.CompanySettings).filter(models.CompanySettings.id == "default").first()
+        if company_row and company_row.default_credit_days:
+            from datetime import timedelta
+            due_date = invoice_date + timedelta(days=int(company_row.default_credit_days))
+
     invoice = models.Invoice(
         party_id=party.id,
         invoice_number=payload.bill_number,
-        invoice_date=datetime.strptime(payload.bill_date, "%Y-%m-%d").date() if payload.bill_date else None,
+        invoice_date=invoice_date,
+        due_date=due_date,
         amount=grand_total,
         gst_amount=grand_total - total_amount if (payload.cgst_pct or payload.sgst_pct or payload.igst_pct) else None,
         raw_image_url=image_url,
@@ -179,6 +191,7 @@ def regenerate_bill(invoice_id: str, payload: RegenerateBillRequest, db: Session
 
     invoice.invoice_number = payload.bill_number
     invoice.invoice_date = datetime.strptime(payload.bill_date, "%Y-%m-%d").date() if payload.bill_date else None
+    invoice.due_date = datetime.strptime(payload.due_date, "%Y-%m-%d").date() if payload.due_date else None
     invoice.amount = grand_total
     invoice.gst_amount = grand_total - total_amount if (payload.cgst_pct or payload.sgst_pct or payload.igst_pct) else None
     invoice.raw_image_url = image_url

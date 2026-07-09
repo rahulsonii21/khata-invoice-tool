@@ -1,0 +1,13 @@
+{
+  "name": "Khata - Invoice Ledger",
+  "short_name": "Khata",
+  "description": "Party-wise invoice ledger, billing, and OCR tool",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FBFAF6",
+  "theme_color": "#1F3A34",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
