@@ -16,7 +16,7 @@ import re
 import httpx
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = "gemini-2.0-flash"  # fast + free-tier friendly
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")  # gemini-2.0-flash was deprecated to 0 free-tier quota
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 EXTRACTION_PROMPT = """You are reading a business invoice or bill. The text may be in Hindi (Devanagari script), English, or Hinglish (Hindi written in Latin letters, or mixed Hindi/English). Numbers may use Indian formatting (e.g. 1,00,000 for one lakh) or symbols like Rs, ₹, /-.
