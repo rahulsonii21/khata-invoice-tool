@@ -1,16 +1,21 @@
 // Minimal service worker - primarily exists to satisfy PWA installability
 // criteria (Chrome requires an active service worker with a fetch handler).
-// Deliberately NOT attempting real offline data caching - this app's data
-// comes from a live API, and serving stale cached API responses would be
-// actively misleading for a bookkeeping tool. Static assets get a light
-// cache-first treatment; everything else just passes through to the network.
+//
+// IMPORTANT: the HTML page must be network-first, not cache-first. Vite
+// fingerprints JS/CSS filenames uniquely on every build, so a cached HTML
+// page from an older deploy will reference asset files that no longer
+// exist after the next deploy - which shows up as a blank white screen,
+// since the browser can't find the JS bundle the (stale) HTML asks for.
+// A previous version of this file cached '/' with cache-first and caused
+// exactly that. Bumping CACHE_NAME also forces old, broken caches to be
+// discarded for anyone who already got stuck on a stale version.
 
-const CACHE_NAME = 'khata-shell-v1'
-const SHELL_ASSETS = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png']
+const CACHE_NAME = 'khata-shell-v2'
+const STATIC_ASSETS = ['/manifest.json', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS)).catch(() => {})
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)).catch(() => {})
   )
   self.skipWaiting()
 })
@@ -32,7 +37,18 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Cache-first for the static app shell itself
+  // Navigation requests (the HTML page itself) and JS/CSS: always try the
+  // network first, so a new deploy is picked up immediately. Only fall back
+  // to cache if genuinely offline.
+  if (event.request.mode === 'navigate' || url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
+    )
+    return
+  }
+
+  // Small static assets (icons, manifest) can be cache-first - these don't
+  // change between deploys the way fingerprinted JS/CSS does.
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   )
