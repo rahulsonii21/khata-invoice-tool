@@ -5,10 +5,12 @@ import PartyList from './components/PartyList'
 import PartyDetail from './components/PartyDetail'
 import Backups from './components/Backups'
 import CompanySettings from './components/CompanySettings'
+import GenerateBill from './components/GenerateBill'
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'upload', label: 'Upload' },
+  { id: 'bill', label: 'Generate Bill' },
   { id: 'parties', label: 'Parties' },
   { id: 'backups', label: 'Backups' },
   { id: 'settings', label: 'Settings' },
@@ -26,8 +28,8 @@ export default function App() {
   return (
     <div className="min-h-screen bg-paper pb-16 sm:pb-0">
       <nav className="border-b border-line bg-white px-4 py-3">
-        <div className="mx-auto flex max-w-5xl items-center gap-4">
-          <div className="flex items-center gap-2">
+        <div className="mx-auto flex max-w-5xl items-center gap-4 overflow-x-auto">
+          <div className="flex flex-shrink-0 items-center gap-2">
             <span className="stamp px-2 py-0.5 text-xs font-semibold text-ink">खाता</span>
             <span className="font-display text-lg font-semibold text-ink">Khata</span>
           </div>
@@ -39,7 +41,7 @@ export default function App() {
                   setTab(t.id)
                   if (t.id !== 'parties') setOpenPartyId(null)
                 }}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ${
                   tab === t.id ? 'bg-ink text-paper' : 'text-ink-faint hover:bg-sage'
                 }`}
               >
@@ -52,6 +54,7 @@ export default function App() {
 
       {tab === 'dashboard' && <Dashboard onOpenParty={openParty} />}
       {tab === 'upload' && <UploadReview />}
+      {tab === 'bill' && <GenerateBill />}
       {tab === 'parties' &&
         (openPartyId ? (
           <PartyDetail partyId={openPartyId} onBack={() => setOpenPartyId(null)} />
@@ -62,7 +65,7 @@ export default function App() {
       {tab === 'settings' && <CompanySettings />}
 
       {/* Mobile bottom tab bar */}
-      <div className="fixed inset-x-0 bottom-0 flex border-t border-line bg-white sm:hidden">
+      <div className="fixed inset-x-0 bottom-0 flex overflow-x-auto border-t border-line bg-white sm:hidden">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -70,7 +73,7 @@ export default function App() {
               setTab(t.id)
               if (t.id !== 'parties') setOpenPartyId(null)
             }}
-            className={`flex-1 py-3 text-xs font-medium ${
+            className={`flex-1 whitespace-nowrap px-2 py-3 text-xs font-medium ${
               tab === t.id ? 'text-ink' : 'text-ink-faint'
             }`}
           >

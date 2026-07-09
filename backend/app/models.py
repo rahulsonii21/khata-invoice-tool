@@ -118,7 +118,7 @@ class AuditLog(Base):
 
 class CompanySettings(Base):
     """Singleton table (always id='default') holding the user's own business
-    details, used as the letterhead on PDF statements."""
+    details, used as the letterhead on PDF statements and generated bills."""
     __tablename__ = "company_settings"
 
     id = Column(String, primary_key=True, default="default")
@@ -126,4 +126,8 @@ class CompanySettings(Base):
     gstin = Column(String, nullable=True)
     address = Column(Text, nullable=True)
     phone = Column(String, nullable=True)
+    logo_url = Column(String, nullable=True)
+    bank_name = Column(String, nullable=True)
+    bank_ifsc = Column(String, nullable=True)
+    bank_account_number = Column(String, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

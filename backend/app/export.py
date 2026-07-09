@@ -12,7 +12,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (
-    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
 )
 from reportlab.lib.enums import TA_RIGHT
 
@@ -35,7 +35,7 @@ def _fmt_inr(amount):
 # ---------------------------------------------------------------------------
 # PDF - single party statement
 # ---------------------------------------------------------------------------
-def generate_party_statement_pdf(party, invoices, company_settings=None) -> bytes:
+def generate_party_statement_pdf(party, invoices, company_settings=None, logo_bytes=None) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
@@ -60,6 +60,14 @@ def generate_party_statement_pdf(party, invoices, company_settings=None) -> byte
 
     # Company letterhead, right-aligned at the top, if the user has set it up
     if company_settings and company_settings.company_name:
+        if logo_bytes:
+            try:
+                logo_img = RLImage(io.BytesIO(logo_bytes), width=20 * mm, height=20 * mm)
+                logo_img.hAlign = "RIGHT"
+                elements.append(logo_img)
+                elements.append(Spacer(1, 2 * mm))
+            except Exception:
+                pass  # a corrupt/unreadable logo file shouldn't break the whole export
         lh_lines = [f"<b>{company_settings.company_name}</b>"]
         if company_settings.gstin:
             lh_lines.append(f"GSTIN: {company_settings.gstin}")

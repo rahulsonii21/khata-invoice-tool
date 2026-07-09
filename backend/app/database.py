@@ -20,3 +20,25 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def ensure_columns_exist(table: str, column_defs: dict):
+    """Lightweight migration helper: adds columns to an existing table if they're
+    missing. create_all() only creates whole tables, not new columns on tables
+    that already exist - this covers that gap for simple additive schema changes
+    without needing a full migration framework (Alembic) for a project this size.
+
+    column_defs: {"column_name": "SQL_TYPE", ...}
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    if table not in inspector.get_table_names():
+        return  # table doesn't exist yet - create_all() will handle it fresh
+
+    existing = {col["name"] for col in inspector.get_columns(table)}
+    with engine.connect() as conn:
+        for col_name, col_type in column_defs.items():
+            if col_name not in existing:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+                conn.commit()

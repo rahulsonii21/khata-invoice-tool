@@ -24,6 +24,12 @@ RUN TESSDATA_DIR=$(find / -type d -name tessdata 2>/dev/null | head -1) && \
         https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/main/hin.traineddata && \
     test -s "$TESSDATA_DIR/eng.traineddata" && test -s "$TESSDATA_DIR/hin.traineddata"
 
+# Devanagari-capable font, needed to render Hindi text when generating bill images
+RUN mkdir -p /app/assets/fonts && \
+    curl -fsSL -o /app/assets/fonts/NotoSansDevanagari.ttf \
+        "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf" && \
+    test -s /app/assets/fonts/NotoSansDevanagari.ttf
+
 WORKDIR /app
 
 COPY requirements.txt .

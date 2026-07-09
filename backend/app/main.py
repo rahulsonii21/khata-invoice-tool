@@ -6,13 +6,22 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .database import Base, engine
-from .routers import parties, invoices, payments, dashboard, ocr, export, backup, settings, uploads
+from .database import Base, engine, ensure_columns_exist
+from .routers import parties, invoices, payments, dashboard, ocr, export, backup, settings, uploads, bills
 from . import scheduler
 
 # Creates tables if they don't exist (fine for SQLite/dev;
 # use Alembic migrations later once schema stabilizes in production).
 Base.metadata.create_all(bind=engine)
+
+# Additive schema fixes for tables that already existed before these columns
+# were introduced (create_all() alone won't add columns to existing tables).
+ensure_columns_exist("company_settings", {
+    "logo_url": "VARCHAR",
+    "bank_name": "VARCHAR",
+    "bank_ifsc": "VARCHAR",
+    "bank_account_number": "VARCHAR",
+})
 
 UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -54,6 +63,7 @@ app.include_router(export.router)
 app.include_router(backup.router)
 app.include_router(settings.router)
 app.include_router(uploads.router)
+app.include_router(bills.router)
 
 
 @app.get("/api/health")

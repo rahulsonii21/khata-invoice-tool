@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from .. import models
+from .. import models, storage
 from ..database import get_db
 from .. import export as export_lib
 
@@ -24,7 +24,11 @@ def export_party_pdf(party_id: str, db: Session = Depends(get_db)):
     )
 
     company_settings = db.query(models.CompanySettings).filter(models.CompanySettings.id == "default").first()
-    pdf_bytes = export_lib.generate_party_statement_pdf(party, invoices, company_settings)
+    logo_bytes = None
+    if company_settings and company_settings.logo_url:
+        logo_bytes = storage.read_image_bytes(company_settings.logo_url)
+
+    pdf_bytes = export_lib.generate_party_statement_pdf(party, invoices, company_settings, logo_bytes)
     filename = f"{party.name.replace(' ', '_')}_statement_{datetime.now().strftime('%Y%m%d')}.pdf"
 
     return Response(

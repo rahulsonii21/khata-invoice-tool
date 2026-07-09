@@ -1,20 +1,34 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import { resolveImageUrl } from '../utils'
 
 export default function CompanySettings() {
-  const [form, setForm] = useState({ company_name: '', gstin: '', address: '', phone: '' })
+  const [form, setForm] = useState({
+    company_name: '', gstin: '', address: '', phone: '',
+    bank_name: '', bank_ifsc: '', bank_account_number: '',
+  })
+  const [logoUrl, setLogoUrl] = useState(null)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  useEffect(() => {
-    api.getCompanySettings().then((s) =>
+  function reload() {
+    api.getCompanySettings().then((s) => {
       setForm({
         company_name: s.company_name || '',
         gstin: s.gstin || '',
         address: s.address || '',
         phone: s.phone || '',
+        bank_name: s.bank_name || '',
+        bank_ifsc: s.bank_ifsc || '',
+        bank_account_number: s.bank_account_number || '',
       })
-    )
+      setLogoUrl(s.logo_url || null)
+    })
+  }
+
+  useEffect(() => {
+    reload()
   }, [])
 
   function update(field, value) {
@@ -32,16 +46,48 @@ export default function CompanySettings() {
     }
   }
 
+  async function handleLogoChange(file) {
+    if (!file) return
+    setUploadingLogo(true)
+    try {
+      const updated = await api.uploadCompanyLogo(file)
+      setLogoUrl(updated.logo_url || null)
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
       <header className="mb-6">
         <h1 className="font-display text-2xl font-semibold text-ink">Your Business Details</h1>
         <p className="mt-1 text-sm text-ink-faint">
-          Appears as the letterhead on PDF statements you export.
+          Appears as the letterhead on PDF statements and generated bills.
         </p>
       </header>
 
       <div className="space-y-3 rounded-lg border border-line bg-white p-4">
+        <Field label="Logo">
+          <div className="flex items-center gap-3">
+            {logoUrl && (
+              <img
+                src={resolveImageUrl(logoUrl)}
+                alt="Logo"
+                className="h-16 w-16 rounded-md border border-line object-contain bg-white"
+              />
+            )}
+            <label className="cursor-pointer rounded-md border border-line px-3 py-2 text-sm text-ink-faint hover:bg-sage/30">
+              {uploadingLogo ? 'Uploading…' : logoUrl ? 'Change logo' : 'Upload logo'}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handleLogoChange(e.target.files[0])}
+              />
+            </label>
+          </div>
+        </Field>
+
         <Field label="Company / business name">
           <input
             className="w-full rounded-md border border-line px-3 py-2 text-sm"
@@ -71,6 +117,35 @@ export default function CompanySettings() {
             onChange={(e) => update('phone', e.target.value)}
           />
         </Field>
+
+        <div className="border-t border-line pt-3">
+          <p className="mb-2 text-xs font-medium text-ink-faint">
+            Bank details (shown on generated bills)
+          </p>
+          <div className="space-y-3">
+            <Field label="Bank name & branch">
+              <input
+                className="w-full rounded-md border border-line px-3 py-2 text-sm"
+                value={form.bank_name}
+                onChange={(e) => update('bank_name', e.target.value)}
+              />
+            </Field>
+            <Field label="IFSC code">
+              <input
+                className="w-full rounded-md border border-line px-3 py-2 text-sm"
+                value={form.bank_ifsc}
+                onChange={(e) => update('bank_ifsc', e.target.value)}
+              />
+            </Field>
+            <Field label="Account number">
+              <input
+                className="w-full rounded-md border border-line px-3 py-2 text-sm"
+                value={form.bank_account_number}
+                onChange={(e) => update('bank_account_number', e.target.value)}
+              />
+            </Field>
+          </div>
+        </div>
 
         <button
           onClick={handleSave}

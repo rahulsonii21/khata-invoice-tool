@@ -4,6 +4,7 @@ __pycache__/
 *.db
 backend/uploads/
 backend/backups/
+backend/assets/
 .env
 
 # Node

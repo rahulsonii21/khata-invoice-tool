@@ -66,6 +66,14 @@ export const api = {
   // Company settings
   getCompanySettings: () => request('/api/settings/company'),
   updateCompanySettings: (data) => request('/api/settings/company', { method: 'PUT', body: JSON.stringify(data) }),
+  uploadCompanyLogo: (file) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request('/api/settings/company/logo', { method: 'POST', body: form })
+  },
+
+  // Bill generation
+  generateBill: (data) => request('/api/bills/generate', { method: 'POST', body: JSON.stringify(data) }),
 }
 
 async function downloadFile(path) {

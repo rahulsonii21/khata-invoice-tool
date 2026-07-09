@@ -124,6 +124,10 @@ class CompanySettingsUpdate(BaseModel):
     gstin: Optional[str] = None
     address: Optional[str] = None
     phone: Optional[str] = None
+    logo_url: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_ifsc: Optional[str] = None
+    bank_account_number: Optional[str] = None
 
 
 class CompanySettingsOut(BaseModel):
@@ -132,3 +136,7 @@ class CompanySettingsOut(BaseModel):
     gstin: Optional[str] = None
     address: Optional[str] = None
     phone: Optional[str] = None
+    logo_url: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_ifsc: Optional[str] = None
+    bank_account_number: Optional[str] = None
