@@ -28,12 +28,12 @@ RUN TESSDATA_DIR=$(find / -type d -name tessdata 2>/dev/null | head -1) && \
         https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/main/hin.traineddata && \
     test -s "$TESSDATA_DIR/eng.traineddata" && test -s "$TESSDATA_DIR/hin.traineddata"
 
-# Devanagari-capable font, needed to render Hindi text when generating bill images
-RUN mkdir -p /app/assets/fonts && \
-    curl -fsSL --retry 5 --retry-delay 3 -A "Mozilla/5.0 (Docker build)" \
-        -o /app/assets/fonts/NotoSansDevanagari.ttf \
-        "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf" && \
-    test -s /app/assets/fonts/NotoSansDevanagari.ttf
+# Devanagari-capable font, needed to render Hindi text when generating bill
+# images. Committed directly into the repo (backend/assets/fonts/) rather than
+# downloaded during build - a prior attempt to fetch it from GitHub at build
+# time failed consistently on Render's build network (but not elsewhere),
+# so removing that external dependency entirely is the reliable fix.
+# (COPY . . below brings this in along with the rest of the app.)
 
 WORKDIR /app
 
