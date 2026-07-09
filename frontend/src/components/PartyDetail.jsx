@@ -7,12 +7,21 @@ export default function PartyDetail({ partyId, onBack }) {
   const [invoices, setInvoices] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [editingParty, setEditingParty] = useState(false)
-  const [partyForm, setPartyForm] = useState({ phone: '', gstin: '' })
+  const [partyForm, setPartyForm] = useState({
+    phone: '', gstin: '', address: '', city: '', pincode: '', email: '',
+  })
 
   function reload() {
     api.getParty(partyId).then((p) => {
       setParty(p)
-      setPartyForm({ phone: p.phone || '', gstin: p.gstin || '' })
+      setPartyForm({
+        phone: p.phone || '',
+        gstin: p.gstin || '',
+        address: p.address || '',
+        city: p.city || '',
+        pincode: p.pincode || '',
+        email: p.email || '',
+      })
     })
     api.listInvoices({ party_id: partyId }).then(setInvoices)
   }
@@ -22,7 +31,14 @@ export default function PartyDetail({ partyId, onBack }) {
   }, [partyId])
 
   async function savePartyDetails() {
-    await api.updateParty(partyId, { phone: partyForm.phone || null, gstin: partyForm.gstin || null })
+    await api.updateParty(partyId, {
+      phone: partyForm.phone || null,
+      gstin: partyForm.gstin || null,
+      address: partyForm.address || null,
+      city: partyForm.city || null,
+      pincode: partyForm.pincode || null,
+      email: partyForm.email || null,
+    })
     setEditingParty(false)
     reload()
   }
@@ -36,36 +52,76 @@ export default function PartyDetail({ partyId, onBack }) {
       </button>
 
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="flex-1">
           <h1 className="font-display text-2xl font-semibold text-ink">{party.name}</h1>
           {editingParty ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <input
-                placeholder="Phone"
-                value={partyForm.phone}
-                onChange={(e) => setPartyForm({ ...partyForm, phone: e.target.value })}
-                className="rounded-md border border-line px-2 py-1 text-sm"
-              />
-              <input
-                placeholder="GSTIN"
-                value={partyForm.gstin}
-                onChange={(e) => setPartyForm({ ...partyForm, gstin: e.target.value })}
-                className="rounded-md border border-line px-2 py-1 text-sm"
-              />
-              <button
-                onClick={savePartyDetails}
-                className="rounded-md bg-ink px-2 py-1 text-xs font-medium text-paper"
-              >
-                Save
-              </button>
-              <button onClick={() => setEditingParty(false)} className="text-xs text-ink-faint">
-                Cancel
-              </button>
+            <div className="mt-3 max-w-lg rounded-lg border border-line bg-white p-3">
+              <div className="grid grid-cols-2 gap-2">
+                <PartyField label="Phone">
+                  <input
+                    value={partyForm.phone}
+                    onChange={(e) => setPartyForm({ ...partyForm, phone: e.target.value })}
+                    className="w-full rounded-md border border-line px-2 py-1.5 text-sm"
+                  />
+                </PartyField>
+                <PartyField label="Email">
+                  <input
+                    value={partyForm.email}
+                    onChange={(e) => setPartyForm({ ...partyForm, email: e.target.value })}
+                    className="w-full rounded-md border border-line px-2 py-1.5 text-sm"
+                  />
+                </PartyField>
+                <PartyField label="GSTIN">
+                  <input
+                    value={partyForm.gstin}
+                    onChange={(e) => setPartyForm({ ...partyForm, gstin: e.target.value })}
+                    className="w-full rounded-md border border-line px-2 py-1.5 text-sm"
+                  />
+                </PartyField>
+                <PartyField label="City">
+                  <input
+                    value={partyForm.city}
+                    onChange={(e) => setPartyForm({ ...partyForm, city: e.target.value })}
+                    className="w-full rounded-md border border-line px-2 py-1.5 text-sm"
+                  />
+                </PartyField>
+                <PartyField label="Pincode">
+                  <input
+                    value={partyForm.pincode}
+                    onChange={(e) => setPartyForm({ ...partyForm, pincode: e.target.value })}
+                    className="w-full rounded-md border border-line px-2 py-1.5 text-sm"
+                  />
+                </PartyField>
+                <PartyField label="Address" className="col-span-2">
+                  <input
+                    value={partyForm.address}
+                    onChange={(e) => setPartyForm({ ...partyForm, address: e.target.value })}
+                    className="w-full rounded-md border border-line px-2 py-1.5 text-sm"
+                  />
+                </PartyField>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={savePartyDetails}
+                  className="rounded-md bg-ink px-3 py-1.5 text-xs font-medium text-paper"
+                >
+                  Save
+                </button>
+                <button onClick={() => setEditingParty(false)} className="text-xs text-ink-faint">
+                  Cancel
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="mt-1 flex items-center gap-3 text-sm text-ink-faint">
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-faint">
               {party.phone && <span>{party.phone}</span>}
+              {party.email && <span>{party.email}</span>}
               {party.gstin && <span>GSTIN: {party.gstin}</span>}
+              {(party.address || party.city || party.pincode) && (
+                <span>
+                  {[party.address, party.city, party.pincode].filter(Boolean).join(', ')}
+                </span>
+              )}
               <button onClick={() => setEditingParty(true)} className="text-ink-light hover:text-ink">
                 Edit details
               </button>
@@ -443,6 +499,15 @@ function LabeledInput({ label, value, onChange, type = 'text' }) {
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-md border border-line px-2 py-1.5 text-sm"
       />
+    </label>
+  )
+}
+
+function PartyField({ label, children, className = '' }) {
+  return (
+    <label className={`block ${className}`}>
+      <span className="mb-1 block text-xs font-medium text-ink-faint">{label}</span>
+      {children}
     </label>
   )
 }

@@ -9,6 +9,10 @@ class PartyCreate(BaseModel):
     name: str
     phone: Optional[str] = None
     gstin: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    pincode: Optional[str] = None
+    email: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -16,6 +20,10 @@ class PartyUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
     gstin: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    pincode: Optional[str] = None
+    email: Optional[str] = None
     notes: Optional[str] = None
     changed_by: Optional[str] = None
 
@@ -26,6 +34,10 @@ class PartyOut(BaseModel):
     name: str
     phone: Optional[str] = None
     gstin: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    pincode: Optional[str] = None
+    email: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime
     total_invoiced: float = 0
@@ -71,6 +83,9 @@ class InvoiceCreate(BaseModel):
     raw_image_url: Optional[str] = None
     ocr_confidence: Optional[float] = None
     remarks: Optional[str] = None
+    shipped_by: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    driver_contact: Optional[str] = None
 
 
 class InvoiceUpdate(BaseModel):
@@ -79,6 +94,9 @@ class InvoiceUpdate(BaseModel):
     amount: Optional[float] = None
     gst_amount: Optional[float] = None
     remarks: Optional[str] = None
+    shipped_by: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    driver_contact: Optional[str] = None
     changed_by: Optional[str] = None
 
 
@@ -93,6 +111,9 @@ class InvoiceOut(BaseModel):
     raw_image_url: Optional[str] = None
     ocr_confidence: Optional[float] = None
     remarks: Optional[str] = None
+    shipped_by: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    driver_contact: Optional[str] = None
     status: InvoiceStatus
     created_at: datetime
     total_paid: float = 0

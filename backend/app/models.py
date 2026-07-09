@@ -34,6 +34,10 @@ class Party(Base):
     name = Column(String, nullable=False, index=True)
     phone = Column(String, nullable=True)
     gstin = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
+    city = Column(String, nullable=True)
+    pincode = Column(String, nullable=True)
+    email = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -64,6 +68,9 @@ class Invoice(Base):
     raw_image_url = Column(String, nullable=True)
     ocr_confidence = Column(Float, nullable=True)
     remarks = Column(Text, nullable=True)
+    shipped_by = Column(String, nullable=True)
+    vehicle_number = Column(String, nullable=True)
+    driver_contact = Column(String, nullable=True)
     status = Column(SAEnum(InvoiceStatus), default=InvoiceStatus.unpaid)
     created_at = Column(DateTime, default=datetime.utcnow)
 

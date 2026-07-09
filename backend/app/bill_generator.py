@@ -50,6 +50,12 @@ def generate_bill_image(
     igst_pct: float = 0,
     party_gstin: str = None,
     party_address: str = None,
+    party_city: str = None,
+    party_pincode: str = None,
+    party_phone: str = None,
+    shipped_by: str = None,
+    vehicle_number: str = None,
+    driver_contact: str = None,
 ) -> bytes:
     """
     company: {"company_name", "gstin", "address", "phone", "logo_bytes" (optional),
@@ -118,12 +124,31 @@ def generate_bill_image(
     draw.text((MARGIN, y), f"श्रीमान् {party_name or ''}", font=f_value, fill=INK)
     y += 35
 
-    if party_gstin or party_address:
-        line = f"GSTIN {party_gstin or ''}"
-        if party_address:
-            line += f"    पता {party_address}"
-        draw.text((MARGIN, y), line, font=f_label, fill=INK)
-        y += 35
+    if party_gstin:
+        draw.text((MARGIN, y), f"GSTIN {party_gstin}", font=f_label, fill=INK)
+        y += 30
+
+    # Full postal address line: address, city, pincode combined
+    address_parts = [p for p in [party_address, party_city, party_pincode] if p]
+    if address_parts:
+        draw.text((MARGIN, y), f"पता {', '.join(address_parts)}", font=f_label, fill=INK)
+        y += 30
+
+    if party_phone:
+        draw.text((MARGIN, y), f"Contact: {party_phone}", font=f_label, fill=INK)
+        y += 30
+
+    # --- Shipping / vehicle details, if provided ---
+    shipping_parts = []
+    if shipped_by:
+        shipping_parts.append(f"Shipped By: {shipped_by}")
+    if vehicle_number:
+        shipping_parts.append(f"Vehicle No.: {vehicle_number}")
+    if driver_contact:
+        shipping_parts.append(f"Driver Contact: {driver_contact}")
+    if shipping_parts:
+        draw.text((MARGIN, y), "   ".join(shipping_parts), font=f_label, fill=INK)
+        y += 30
 
     y += 10
 

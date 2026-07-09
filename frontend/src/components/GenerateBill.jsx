@@ -15,6 +15,9 @@ export default function GenerateBill() {
   const [cgstPct, setCgstPct] = useState('')
   const [sgstPct, setSgstPct] = useState('')
   const [igstPct, setIgstPct] = useState('')
+  const [shippedBy, setShippedBy] = useState('')
+  const [vehicleNumber, setVehicleNumber] = useState('')
+  const [driverContact, setDriverContact] = useState('')
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState(null)
   const [result, setResult] = useState(null)
@@ -72,6 +75,9 @@ export default function GenerateBill() {
         cgst_pct: parseFloat(cgstPct) || 0,
         sgst_pct: parseFloat(sgstPct) || 0,
         igst_pct: parseFloat(igstPct) || 0,
+        shipped_by: shippedBy || null,
+        vehicle_number: vehicleNumber || null,
+        driver_contact: driverContact || null,
       })
       setResult(res)
     } catch (e) {
@@ -88,6 +94,9 @@ export default function GenerateBill() {
     setCgstPct('')
     setSgstPct('')
     setIgstPct('')
+    setShippedBy('')
+    setVehicleNumber('')
+    setDriverContact('')
   }
 
   if (result) {
@@ -202,6 +211,34 @@ export default function GenerateBill() {
           <button onClick={addRow} className="mt-2 text-xs font-medium text-ink-light hover:text-ink">
             + Add item
           </button>
+        </div>
+
+        <div className="border-t border-line pt-3">
+          <p className="mb-2 text-xs font-medium text-ink-faint">Shipping details (optional)</p>
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Shipped by">
+              <input
+                value={shippedBy}
+                onChange={(e) => setShippedBy(e.target.value)}
+                placeholder="Transport name"
+                className="w-full rounded-md border border-line px-2 py-1.5 text-sm"
+              />
+            </Field>
+            <Field label="Vehicle number">
+              <input
+                value={vehicleNumber}
+                onChange={(e) => setVehicleNumber(e.target.value)}
+                className="w-full rounded-md border border-line px-2 py-1.5 text-sm"
+              />
+            </Field>
+            <Field label="Driver contact">
+              <input
+                value={driverContact}
+                onChange={(e) => setDriverContact(e.target.value)}
+                className="w-full rounded-md border border-line px-2 py-1.5 text-sm"
+              />
+            </Field>
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-3 border-t border-line pt-3">

@@ -25,6 +25,9 @@ class GenerateBillRequest(BaseModel):
     cgst_pct: float = 0
     sgst_pct: float = 0
     igst_pct: float = 0
+    shipped_by: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    driver_contact: Optional[str] = None
 
 
 @router.post("/generate")
@@ -67,6 +70,13 @@ def generate_bill(payload: GenerateBillRequest, db: Session = Depends(get_db)):
             sgst_pct=payload.sgst_pct,
             igst_pct=payload.igst_pct,
             party_gstin=party.gstin,
+            party_address=party.address,
+            party_city=party.city,
+            party_pincode=party.pincode,
+            party_phone=party.phone,
+            shipped_by=payload.shipped_by,
+            vehicle_number=payload.vehicle_number,
+            driver_contact=payload.driver_contact,
         )
     except Exception as e:
         raise HTTPException(500, f"Bill generation failed: {e}")
@@ -86,6 +96,9 @@ def generate_bill(payload: GenerateBillRequest, db: Session = Depends(get_db)):
         amount=grand_total,
         gst_amount=grand_total - total_amount if (payload.cgst_pct or payload.sgst_pct or payload.igst_pct) else None,
         raw_image_url=image_url,
+        shipped_by=payload.shipped_by,
+        vehicle_number=payload.vehicle_number,
+        driver_contact=payload.driver_contact,
     )
     invoice.refresh_status()
     db.add(invoice)

@@ -22,6 +22,17 @@ ensure_columns_exist("company_settings", {
     "bank_ifsc": "VARCHAR",
     "bank_account_number": "VARCHAR",
 })
+ensure_columns_exist("parties", {
+    "address": "TEXT",
+    "city": "VARCHAR",
+    "pincode": "VARCHAR",
+    "email": "VARCHAR",
+})
+ensure_columns_exist("invoices", {
+    "shipped_by": "VARCHAR",
+    "vehicle_number": "VARCHAR",
+    "driver_contact": "VARCHAR",
+})
 
 UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
