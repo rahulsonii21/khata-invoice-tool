@@ -78,6 +78,14 @@ export const api = {
   downloadPartyExcel: (partyId) => downloadFile(`/api/export/party/${partyId}/excel`),
   downloadAllExcel: () => downloadFile('/api/export/all/excel'),
 
+  // Monthly reports
+  downloadMonthlySummaryPdf: (month, partyId) =>
+    downloadFile(`/api/export/monthly/summary-pdf?month=${month}${partyId ? `&party_id=${partyId}` : ''}`),
+  downloadMonthlyDetailedExcel: (month, partyId) =>
+    downloadFile(`/api/export/monthly/detailed-excel?month=${month}${partyId ? `&party_id=${partyId}` : ''}`),
+  downloadMonthlyBillsPdf: (month, partyId) =>
+    downloadFile(`/api/export/monthly/bills-pdf?month=${month}${partyId ? `&party_id=${partyId}` : ''}`),
+
   // Backup
   listBackups: () => request('/api/backup'),
   runBackupNow: () => request('/api/backup/run', { method: 'POST' }),

@@ -31,7 +31,7 @@ def check(condition, description):
 def run():
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport=MOBILE_VIEWPORT)
+        page = browser.new_page(viewport=MOBILE_VIEWPORT, accept_downloads=True)
         page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
         page.on("pageerror", lambda exc: console_errors.append(str(exc)))
         failed_urls = []
@@ -83,6 +83,29 @@ def run():
         page.wait_for_timeout(800)
         body = page.inner_text("body")
         check("Backup" in body, "Backups screen loaded")
+
+        print("\n=== 6b. Reports screen ===")
+        page.locator("text=Reports").last.click()
+        page.wait_for_timeout(800)
+        body = page.inner_text("body")
+        check("Reports" in body, "Reports screen loaded")
+        check("Summary PDF" in body, "Summary PDF option present")
+        check("Combined Bills PDF" in body, "Combined Bills PDF option present")
+
+        print("\n=== 6c. Download filename check (regression guard) ===")
+        # This exact bug shipped silently once already: Content-Disposition
+        # wasn't exposed via CORS, so every export downloaded as a generic
+        # "export.pdf"/"export" instead of the real filename - invisible in
+        # curl-based testing since curl doesn't enforce CORS, only caught by
+        # actually clicking the button in a real browser context.
+        try:
+            with page.expect_download(timeout=8000) as download_info:
+                page.locator("text=Summary PDF").click()
+            filename = download_info.value.suggested_filename
+            check(filename != "export" and filename != "export.pdf" and filename.startswith("sales_summary"),
+                  f"Download has a real filename, not a generic fallback (got: {filename})")
+        except Exception as e:
+            check(False, f"Download did not trigger at all: {e}")
 
         print("\n=== 7. Console error check ===")
         # fonts.googleapis.com 403s are a known limitation of this specific

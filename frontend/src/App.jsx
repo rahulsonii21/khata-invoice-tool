@@ -13,12 +13,14 @@ const UploadReview = lazy(() => import('./components/UploadReview'))
 const Backups = lazy(() => import('./components/Backups'))
 const CompanySettings = lazy(() => import('./components/CompanySettings'))
 const GenerateBill = lazy(() => import('./components/GenerateBill'))
+const Reports = lazy(() => import('./components/Reports'))
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'upload', label: 'Upload' },
   { id: 'bill', label: 'Generate Bill' },
   { id: 'parties', label: 'Parties' },
+  { id: 'reports', label: 'Reports' },
   { id: 'backups', label: 'Backups' },
   { id: 'settings', label: 'Settings' },
 ]
@@ -110,6 +112,7 @@ export default function App() {
           ))}
         {tab === 'backups' && <Backups />}
         {tab === 'settings' && <CompanySettings />}
+        {tab === 'reports' && <Reports />}
       </Suspense>
 
       {/* Mobile bottom tab bar */}

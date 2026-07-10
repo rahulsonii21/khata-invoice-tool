@@ -8,6 +8,7 @@ export default function PartyDetail({ partyId, onBack }) {
   const [invoices, setInvoices] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [editingParty, setEditingParty] = useState(false)
+  const [monthFilter, setMonthFilter] = useState('') // '' = all time
   const [partyForm, setPartyForm] = useState({
     phone: '', gstin: '', address: '', city: '', pincode: '', email: '',
   })
@@ -24,12 +25,14 @@ export default function PartyDetail({ partyId, onBack }) {
         email: p.email || '',
       })
     })
-    api.listInvoices({ party_id: partyId }).then(setInvoices)
+    const params = { party_id: partyId }
+    if (monthFilter) params.month = monthFilter
+    api.listInvoices(params).then(setInvoices)
   }
 
   useEffect(() => {
     reload()
-  }, [partyId])
+  }, [partyId, monthFilter])
 
   async function savePartyDetails() {
     await api.updateParty(partyId, {
@@ -173,10 +176,25 @@ export default function PartyDetail({ partyId, onBack }) {
         )}
       </div>
 
+      <div className="mb-4 flex items-center gap-2">
+        <label className="text-xs font-medium text-ink-faint">Filter by month:</label>
+        <input
+          type="month"
+          value={monthFilter}
+          onChange={(e) => setMonthFilter(e.target.value)}
+          className="rounded-md border border-line px-2 py-1 text-sm"
+        />
+        {monthFilter && (
+          <button onClick={() => setMonthFilter('')} className="text-xs text-ink-faint hover:text-ink">
+            Clear
+          </button>
+        )}
+      </div>
+
       <div className="space-y-3">
         {invoices.length === 0 && (
           <p className="rounded-lg border border-dashed border-line bg-white p-8 text-center text-sm text-ink-faint">
-            No invoices for this party yet.
+            {monthFilter ? 'No invoices for this party in that month.' : 'No invoices for this party yet.'}
           </p>
         )}
         {invoices.map((inv) => (

@@ -154,8 +154,142 @@ def generate_party_statement_pdf(party, invoices, company_settings=None, logo_by
 
 
 # ---------------------------------------------------------------------------
-# Excel - single party or all parties raw data dump
+# PDF - monthly summary across parties (totals only, one row per party)
 # ---------------------------------------------------------------------------
+def generate_monthly_summary_pdf(month_label, party_invoice_pairs, company_settings=None, logo_bytes=None) -> bytes:
+    """
+    party_invoice_pairs: list of (party, invoices) tuples, invoices already
+    filtered to the month being reported on.
+    """
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        topMargin=20 * mm, bottomMargin=20 * mm,
+        leftMargin=18 * mm, rightMargin=18 * mm,
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("Title", parent=styles["Heading1"], textColor=INK, fontSize=18, spaceAfter=2)
+    subtitle_style = ParagraphStyle("Subtitle", parent=styles["Normal"], textColor=colors.HexColor("#7C9089"), fontSize=10)
+    letterhead_style = ParagraphStyle("Letterhead", parent=styles["Normal"], textColor=INK, fontSize=9, alignment=TA_RIGHT)
+
+    elements = []
+
+    if company_settings and company_settings.company_name:
+        if logo_bytes:
+            try:
+                logo_img = RLImage(io.BytesIO(logo_bytes), width=20 * mm, height=20 * mm)
+                logo_img.hAlign = "RIGHT"
+                elements.append(logo_img)
+                elements.append(Spacer(1, 2 * mm))
+            except Exception:
+                pass
+        elements.append(Paragraph(f"<b>{company_settings.company_name}</b>", letterhead_style))
+        elements.append(Spacer(1, 6 * mm))
+
+    elements.append(Paragraph(f"Monthly Sales Report — {month_label}", title_style))
+    elements.append(Paragraph(f"Generated: {datetime.now().strftime('%d %b %Y')}", subtitle_style))
+    elements.append(Spacer(1, 8 * mm))
+
+    grand_invoiced = sum(sum(inv.amount for inv in invs) for _, invs in party_invoice_pairs)
+    grand_received = sum(sum(p.amount for inv in invs for p in inv.payments) for _, invs in party_invoice_pairs)
+
+    summary_data = [["Total Invoiced", "Total Received", "Outstanding (this month's bills)"]]
+    summary_data.append([_fmt_inr(grand_invoiced), _fmt_inr(grand_received), _fmt_inr(grand_invoiced - grand_received)])
+    summary_table = Table(summary_data, colWidths=[52 * mm, 52 * mm, 52 * mm])
+    summary_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), SAGE),
+        ("TEXTCOLOR", (0, 0), (-1, 0), INK),
+        ("FONTSIZE", (0, 0), (-1, 0), 9),
+        ("FONTSIZE", (0, 1), (-1, 1), 13),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
+        ("TOPPADDING", (0, 1), (-1, 1), 4),
+        ("BOTTOMPADDING", (0, 1), (-1, 1), 10),
+        ("GRID", (0, 0), (-1, -1), 0.5, LINE),
+    ]))
+    elements.append(summary_table)
+    elements.append(Spacer(1, 8 * mm))
+
+    # Per-party breakdown table
+    rows = [["Party", "Invoiced", "Received", "Outstanding", "# Bills"]]
+    for party, invs in sorted(party_invoice_pairs, key=lambda x: sum(i.amount for i in x[1]), reverse=True):
+        if not invs:
+            continue
+        invoiced = sum(i.amount for i in invs)
+        received = sum(p.amount for i in invs for p in i.payments)
+        rows.append([party.name, _fmt_inr(invoiced), _fmt_inr(received), _fmt_inr(invoiced - received), str(len(invs))])
+
+    if len(rows) > 1:
+        t = Table(rows, colWidths=[62 * mm, 32 * mm, 32 * mm, 32 * mm, 18 * mm])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), SAGE),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+            ("GRID", (0, 0), (-1, -1), 0.5, LINE),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(t)
+    else:
+        elements.append(Paragraph("No invoices in this period.", styles["Normal"]))
+
+    doc.build(elements)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# PDF - combined bill images, one per page, chronological, with captions
+# ---------------------------------------------------------------------------
+def generate_combined_bills_pdf(invoices_with_images) -> bytes:
+    """
+    invoices_with_images: list of (invoice, party_name, image_bytes) tuples,
+    already sorted into the desired page order by the caller.
+    Skips any entry where image_bytes is None (missing/unreadable image)
+    rather than failing the whole export.
+    """
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        topMargin=15 * mm, bottomMargin=15 * mm,
+        leftMargin=15 * mm, rightMargin=15 * mm,
+    )
+    styles = getSampleStyleSheet()
+    caption_style = ParagraphStyle(
+        "Caption", parent=styles["Normal"], textColor=INK, fontSize=10, spaceAfter=4,
+    )
+
+    elements = []
+    included = 0
+    skipped = 0
+
+    for invoice, party_name, image_bytes in invoices_with_images:
+        if not image_bytes:
+            skipped += 1
+            continue
+        try:
+            date_str = invoice.invoice_date.strftime("%d %b %Y") if invoice.invoice_date else "no date"
+            caption = f"<b>{party_name}</b> — Invoice {invoice.invoice_number or '(no number)'} — {date_str} — {_fmt_inr(invoice.amount)}"
+            elements.append(Paragraph(caption, caption_style))
+
+            img = RLImage(io.BytesIO(image_bytes))
+            # Fit within the page while preserving aspect ratio
+            max_w, max_h = 180 * mm, 240 * mm
+            ratio = min(max_w / img.imageWidth, max_h / img.imageHeight, 1)
+            img.drawWidth = img.imageWidth * ratio
+            img.drawHeight = img.imageHeight * ratio
+            elements.append(img)
+            elements.append(Spacer(1, 10 * mm))
+            included += 1
+        except Exception:
+            skipped += 1
+            continue
+
+    if included == 0:
+        elements.append(Paragraph("No bill images found for this period.", styles["Normal"]))
+
+    doc.build(elements)
+    return buf.getvalue()
 HEADER_FILL = PatternFill(start_color="1F3A34", end_color="1F3A34", fill_type="solid")
 HEADER_FONT = Font(color="FBFAF6", bold=True)
 

@@ -74,6 +74,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Content-Disposition isn't in the browser's default CORS-safelisted
+    # headers, so without this, every file download's real filename is
+    # invisible to frontend JS across origins (which is the real production
+    # setup: Vercel frontend, Render backend). Every export was silently
+    # falling back to a generic filename because of this.
+    expose_headers=["Content-Disposition"],
 )
 
 # Serves saved invoice images at /files/invoices/<name>

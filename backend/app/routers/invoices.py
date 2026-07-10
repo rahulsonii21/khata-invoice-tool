@@ -13,6 +13,7 @@ router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 def list_invoices(
     party_id: Optional[str] = Query(None),
     status: Optional[models.InvoiceStatus] = Query(None),
+    month: Optional[str] = Query(None, description="YYYY-MM, filters by invoice_date"),
     db: Session = Depends(get_db),
 ):
     q = db.query(models.Invoice).options(selectinload(models.Invoice.payments))
@@ -20,6 +21,15 @@ def list_invoices(
         q = q.filter(models.Invoice.party_id == party_id)
     if status:
         q = q.filter(models.Invoice.status == status)
+    if month:
+        from datetime import datetime
+        import calendar
+        year, mon = (int(x) for x in month.split("-"))
+        last_day = calendar.monthrange(year, mon)[1]
+        q = q.filter(
+            models.Invoice.invoice_date >= datetime(year, mon, 1).date(),
+            models.Invoice.invoice_date <= datetime(year, mon, last_day).date(),
+        )
     invoices = q.order_by(models.Invoice.invoice_date.desc().nullslast()).all()
     return [_to_out(i) for i in invoices]
 
