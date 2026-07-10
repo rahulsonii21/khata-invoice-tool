@@ -172,3 +172,113 @@ class CompanySettingsOut(BaseModel):
     bank_ifsc: Optional[str] = None
     bank_account_number: Optional[str] = None
     default_credit_days: Optional[float] = None
+
+
+# ---------- Purchase ledger (suppliers/purchases/purchase payments) ----------
+class SupplierCreate(BaseModel):
+    name: str
+    phone: Optional[str] = None
+    gstin: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    pincode: Optional[str] = None
+    email: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class SupplierUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    gstin: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    pincode: Optional[str] = None
+    email: Optional[str] = None
+    notes: Optional[str] = None
+    changed_by: Optional[str] = None
+
+
+class SupplierOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    name: str
+    phone: Optional[str] = None
+    gstin: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    pincode: Optional[str] = None
+    email: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: datetime
+    total_purchased: float = 0
+    total_paid: float = 0
+    outstanding: float = 0
+
+
+class PurchasePaymentCreate(BaseModel):
+    amount: float
+    payment_date: date
+    mode: PaymentMode = PaymentMode.other
+    remarks: Optional[str] = None
+
+
+class PurchasePaymentUpdate(BaseModel):
+    amount: Optional[float] = None
+    payment_date: Optional[date] = None
+    mode: Optional[PaymentMode] = None
+    remarks: Optional[str] = None
+    changed_by: Optional[str] = None
+
+
+class PurchasePaymentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    purchase_id: str
+    amount: float
+    payment_date: date
+    mode: PaymentMode
+    remarks: Optional[str] = None
+    created_at: datetime
+    edited_at: Optional[datetime] = None
+
+
+class PurchaseCreate(BaseModel):
+    supplier_id: str
+    purchase_number: Optional[str] = None
+    purchase_date: Optional[date] = None
+    due_date: Optional[date] = None
+    amount: float
+    gst_amount: Optional[float] = None
+    raw_image_url: Optional[str] = None
+    ocr_confidence: Optional[float] = None
+    remarks: Optional[str] = None
+
+
+class PurchaseUpdate(BaseModel):
+    purchase_number: Optional[str] = None
+    purchase_date: Optional[date] = None
+    due_date: Optional[date] = None
+    amount: Optional[float] = None
+    gst_amount: Optional[float] = None
+    remarks: Optional[str] = None
+    changed_by: Optional[str] = None
+
+
+class PurchaseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    supplier_id: str
+    purchase_number: Optional[str] = None
+    purchase_date: Optional[date] = None
+    due_date: Optional[date] = None
+    is_overdue: bool = False
+    amount: float
+    gst_amount: Optional[float] = None
+    raw_image_url: Optional[str] = None
+    ocr_confidence: Optional[float] = None
+    remarks: Optional[str] = None
+    status: InvoiceStatus
+    created_at: datetime
+    total_paid: float = 0
+    outstanding: float = 0
+    payments: List[PurchasePaymentOut] = []

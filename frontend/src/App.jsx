@@ -14,12 +14,15 @@ const Backups = lazy(() => import('./components/Backups'))
 const CompanySettings = lazy(() => import('./components/CompanySettings'))
 const GenerateBill = lazy(() => import('./components/GenerateBill'))
 const Reports = lazy(() => import('./components/Reports'))
+const SupplierList = lazy(() => import('./components/SupplierList'))
+const SupplierDetail = lazy(() => import('./components/SupplierDetail'))
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'upload', label: 'Upload' },
   { id: 'bill', label: 'Generate Bill' },
   { id: 'parties', label: 'Parties' },
+  { id: 'suppliers', label: 'Suppliers' },
   { id: 'reports', label: 'Reports' },
   { id: 'backups', label: 'Backups' },
   { id: 'settings', label: 'Settings' },
@@ -28,6 +31,7 @@ const TABS = [
 export default function App() {
   const [tab, setTab] = useState('dashboard')
   const [openPartyId, setOpenPartyId] = useState(null)
+  const [openSupplierId, setOpenSupplierId] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [needsLogin, setNeedsLogin] = useState(false)
   const [logoUrl, setLogoUrl] = useState(null)
@@ -61,6 +65,11 @@ export default function App() {
     setTab('parties')
   }
 
+  function openSupplier(id) {
+    setOpenSupplierId(id)
+    setTab('suppliers')
+  }
+
   if (!authChecked) {
     return <div className="flex min-h-screen items-center justify-center bg-paper text-sm text-ink-faint">Loading…</div>
   }
@@ -88,6 +97,7 @@ export default function App() {
                 onClick={() => {
                   setTab(t.id)
                   if (t.id !== 'parties') setOpenPartyId(null)
+                  if (t.id !== 'suppliers') setOpenSupplierId(null)
                 }}
                 className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ${
                   tab === t.id ? 'bg-ink text-paper' : 'text-ink-faint hover:bg-sage'
@@ -101,7 +111,7 @@ export default function App() {
       </nav>
 
       <Suspense fallback={<div className="mx-auto max-w-5xl px-4 py-6 text-sm text-ink-faint">Loading…</div>}>
-        {tab === 'dashboard' && <Dashboard onOpenParty={openParty} />}
+        {tab === 'dashboard' && <Dashboard onOpenParty={openParty} onOpenSupplier={openSupplier} />}
         {tab === 'upload' && <UploadReview />}
         {tab === 'bill' && <GenerateBill />}
         {tab === 'parties' &&
@@ -109,6 +119,12 @@ export default function App() {
             <PartyDetail partyId={openPartyId} onBack={() => setOpenPartyId(null)} />
           ) : (
             <PartyList onOpenParty={setOpenPartyId} />
+          ))}
+        {tab === 'suppliers' &&
+          (openSupplierId ? (
+            <SupplierDetail supplierId={openSupplierId} onBack={() => setOpenSupplierId(null)} />
+          ) : (
+            <SupplierList onOpenSupplier={setOpenSupplierId} />
           ))}
         {tab === 'backups' && <Backups />}
         {tab === 'settings' && <CompanySettings />}
@@ -123,6 +139,7 @@ export default function App() {
             onClick={() => {
               setTab(t.id)
               if (t.id !== 'parties') setOpenPartyId(null)
+              if (t.id !== 'suppliers') setOpenSupplierId(null)
             }}
             className={`flex-1 whitespace-nowrap px-2 py-3 text-xs font-medium ${
               tab === t.id ? 'text-ink' : 'text-ink-faint'

@@ -61,6 +61,38 @@ def get_summary(db: Session = Depends(get_db)):
         .all()
     )
 
+    # --- Payables (purchase ledger) - mirrors everything above, for what
+    # this business owes suppliers rather than what customers owe it. ---
+    suppliers = (
+        db.query(models.Supplier)
+        .options(selectinload(models.Supplier.purchases).selectinload(models.Purchase.payments))
+        .all()
+    )
+    total_purchased = sum(s.total_purchased for s in suppliers)
+    total_paid_to_suppliers = sum(s.total_paid for s in suppliers)
+    total_payable = total_purchased - total_paid_to_suppliers
+
+    top_payable = sorted(
+        [{"supplier_id": s.id, "name": s.name, "outstanding": s.outstanding} for s in suppliers],
+        key=lambda x: x["outstanding"],
+        reverse=True,
+    )[:5]
+
+    payable_overdue_by_supplier = {}
+    total_payable_overdue = 0
+    payable_overdue_count = 0
+    for supplier in suppliers:
+        for purchase in supplier.purchases:
+            if purchase.is_overdue:
+                total_payable_overdue += purchase.outstanding
+                payable_overdue_count += 1
+                bucket = payable_overdue_by_supplier.setdefault(
+                    supplier.id, {"supplier_id": supplier.id, "name": supplier.name, "amount": 0, "count": 0}
+                )
+                bucket["amount"] += purchase.outstanding
+                bucket["count"] += 1
+    top_payable_overdue = sorted(payable_overdue_by_supplier.values(), key=lambda x: x["amount"], reverse=True)[:5]
+
     return {
         "total_invoiced": total_invoiced,
         "total_received": total_received,
@@ -70,6 +102,14 @@ def get_summary(db: Session = Depends(get_db)):
         "party_count": len(parties),
         "top_outstanding_parties": top_outstanding,
         "top_overdue_parties": top_overdue,
+        "total_purchased": total_purchased,
+        "total_paid_to_suppliers": total_paid_to_suppliers,
+        "total_payable": total_payable,
+        "total_payable_overdue": total_payable_overdue,
+        "payable_overdue_count": payable_overdue_count,
+        "supplier_count": len(suppliers),
+        "top_payable_suppliers": top_payable,
+        "top_payable_overdue_suppliers": top_payable_overdue,
         "recent_payments": [
             {
                 "id": pay.id,

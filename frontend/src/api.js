@@ -104,6 +104,29 @@ export const api = {
   generateBill: (data) => request('/api/bills/generate', { method: 'POST', body: JSON.stringify(data) }),
   regenerateBill: (invoiceId, data) => request(`/api/bills/${invoiceId}/regenerate`, { method: 'PUT', body: JSON.stringify(data) }),
 
+  // Suppliers (purchase ledger - payables)
+  listSuppliers: () => request('/api/suppliers'),
+  getSupplier: (id) => request(`/api/suppliers/${id}`),
+  createSupplier: (data) => request('/api/suppliers', { method: 'POST', body: JSON.stringify(data) }),
+  updateSupplier: (id, data) => request(`/api/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteSupplier: (id) => request(`/api/suppliers/${id}`, { method: 'DELETE' }),
+
+  // Purchases
+  listPurchases: (params = {}) => {
+    const qs = new URLSearchParams(params).toString()
+    return request(`/api/purchases${qs ? `?${qs}` : ''}`)
+  },
+  getPurchase: (id) => request(`/api/purchases/${id}`),
+  createPurchase: (data) => request('/api/purchases', { method: 'POST', body: JSON.stringify(data) }),
+  updatePurchase: (id, data) => request(`/api/purchases/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletePurchase: (id) => request(`/api/purchases/${id}`, { method: 'DELETE' }),
+
+  // Purchase payments
+  addPurchasePayment: (purchaseId, data) =>
+    request(`/api/purchases/${purchaseId}/payments`, { method: 'POST', body: JSON.stringify(data) }),
+  updatePurchasePayment: (id, data) => request(`/api/purchase-payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletePurchasePayment: (id) => request(`/api/purchase-payments/${id}`, { method: 'DELETE' }),
+
   // Auth
   getAuthStatus: () => fetch(`${BASE_URL}/api/auth/status`).then((r) => r.json()),
   login: (pin) =>

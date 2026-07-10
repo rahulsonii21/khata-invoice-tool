@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { formatINR, STATUS_STYLES } from '../utils'
 
-export default function Dashboard({ onOpenParty }) {
+export default function Dashboard({ onOpenParty, onOpenSupplier }) {
   const [summary, setSummary] = useState(null)
   const [error, setError] = useState(null)
 
@@ -39,6 +39,40 @@ export default function Dashboard({ onOpenParty }) {
               >
                 <span className="text-ink">{p.name} <span className="text-xs text-ink-faint">({p.count} overdue)</span></span>
                 <span className="tabular-nums font-medium text-rust">{formatINR(p.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Payables - what THIS business owes suppliers, kept visually distinct
+          from receivables above so the two directions of money never get
+          confused with each other at a glance. */}
+      {summary.supplier_count > 0 && (
+        <section className="mt-6 rounded-lg border border-line bg-white p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-base font-semibold text-ink">You owe suppliers</h2>
+            <span className="tabular-nums font-display text-lg font-semibold text-marigold">
+              {formatINR(summary.total_payable)}
+            </span>
+          </div>
+          {summary.total_payable_overdue > 0 && (
+            <p className="mt-1 text-xs text-rust">
+              {formatINR(summary.total_payable_overdue)} of that is overdue ({summary.payable_overdue_count})
+            </p>
+          )}
+          <ul className="mt-3 space-y-2">
+            {summary.top_payable_suppliers?.length === 0 && (
+              <li className="text-sm text-ink-faint">Nothing payable — all clear.</li>
+            )}
+            {summary.top_payable_suppliers?.map((s) => (
+              <li
+                key={s.supplier_id}
+                onClick={() => onOpenSupplier?.(s.supplier_id)}
+                className="flex cursor-pointer items-center justify-between rounded-md px-2 py-2 text-sm hover:bg-sage"
+              >
+                <span className="text-ink">{s.name}</span>
+                <span className="tabular-nums font-medium text-marigold">{formatINR(s.outstanding)}</span>
               </li>
             ))}
           </ul>

@@ -54,6 +54,13 @@ def run():
         body = page.inner_text("body")
         check("All customers" in body or "Party" in body, "Parties screen loaded after tap")
 
+        print("\n=== 2b. Suppliers tab (purchase ledger) ===")
+        page.locator("text=Suppliers").last.click()
+        page.wait_for_timeout(800)
+        body = page.inner_text("body")
+        check("Suppliers" in body, "Suppliers screen loaded")
+        check("New supplier" in body, "New supplier button present")
+
         print("\n=== 3. Upload screen and mode switching ===")
         page.locator("text=Upload").last.click()
         page.wait_for_timeout(800)

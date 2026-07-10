@@ -151,3 +151,97 @@ class CompanySettings(Base):
     bank_account_number = Column(String, nullable=True)
     default_credit_days = Column(Float, nullable=True)  # auto-fills due_date on new invoices when set
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Purchase ledger (payables) - the mirror image of Party/Invoice/Payment
+# above, but for what THIS business owes its suppliers, rather than what
+# customers owe this business. Kept as separate tables rather than adding a
+# "direction" flag to Party/Invoice - safer (zero risk of touching the
+# existing, working customer-side code) at the cost of some duplication.
+# ---------------------------------------------------------------------------
+class Supplier(Base):
+    __tablename__ = "suppliers"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    name = Column(String, nullable=False, index=True)
+    phone = Column(String, nullable=True)
+    gstin = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
+    city = Column(String, nullable=True)
+    pincode = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    purchases = relationship("Purchase", back_populates="supplier", cascade="all, delete-orphan")
+
+    @property
+    def total_purchased(self):
+        return sum(p.amount for p in self.purchases)
+
+    @property
+    def total_paid(self):
+        return sum(pay.amount for p in self.purchases for pay in p.payments)
+
+    @property
+    def outstanding(self):
+        return self.total_purchased - self.total_paid
+
+
+class Purchase(Base):
+    __tablename__ = "purchases"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    supplier_id = Column(UUID(as_uuid=False), ForeignKey("suppliers.id"), nullable=False)
+    purchase_number = Column(String, nullable=True)  # the supplier's own bill/invoice number
+    purchase_date = Column(Date, nullable=True)
+    due_date = Column(Date, nullable=True)
+    amount = Column(Float, nullable=False, default=0.0)
+    gst_amount = Column(Float, nullable=True)
+    raw_image_url = Column(String, nullable=True)  # photo of the supplier's bill
+    ocr_confidence = Column(Float, nullable=True)
+    remarks = Column(Text, nullable=True)
+    status = Column(SAEnum(InvoiceStatus), default=InvoiceStatus.unpaid)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    supplier = relationship("Supplier", back_populates="purchases")
+    payments = relationship("PurchasePayment", back_populates="purchase", cascade="all, delete-orphan")
+
+    @property
+    def total_paid(self):
+        return sum(p.amount for p in self.payments)
+
+    @property
+    def outstanding(self):
+        return self.amount - self.total_paid
+
+    @property
+    def is_overdue(self):
+        if self.outstanding <= 0 or not self.due_date:
+            return False
+        return self.due_date < date.today()
+
+    def refresh_status(self):
+        paid = self.total_paid
+        if paid <= 0:
+            self.status = InvoiceStatus.unpaid
+        elif paid < self.amount:
+            self.status = InvoiceStatus.partially_paid
+        else:
+            self.status = InvoiceStatus.paid
+
+
+class PurchasePayment(Base):
+    __tablename__ = "purchase_payments"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    purchase_id = Column(UUID(as_uuid=False), ForeignKey("purchases.id"), nullable=False)
+    amount = Column(Float, nullable=False)
+    payment_date = Column(Date, nullable=False, default=date.today)
+    mode = Column(SAEnum(PaymentMode), default=PaymentMode.other)
+    remarks = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    edited_at = Column(DateTime, nullable=True)
+
+    purchase = relationship("Purchase", back_populates="payments")
