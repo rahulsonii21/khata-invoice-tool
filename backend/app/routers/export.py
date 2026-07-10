@@ -196,3 +196,110 @@ def export_all_excel(db: Session = Depends(get_db)):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# Purchase ledger (payables) monthly reports - mirror the sales-side ones above
+# ---------------------------------------------------------------------------
+def _get_month_purchases(db: Session, month: str, supplier_id: Optional[str] = None):
+    start, end = _month_bounds(month)
+
+    supplier_query = db.query(models.Supplier)
+    if supplier_id:
+        supplier_query = supplier_query.filter(models.Supplier.id == supplier_id)
+    suppliers = supplier_query.order_by(models.Supplier.name).all()
+
+    result = []
+    for supplier in suppliers:
+        purchases = (
+            db.query(models.Purchase)
+            .filter(
+                models.Purchase.supplier_id == supplier.id,
+                models.Purchase.purchase_date >= start,
+                models.Purchase.purchase_date <= end,
+            )
+            .order_by(models.Purchase.purchase_date)
+            .all()
+        )
+        result.append((supplier, purchases))
+    return result
+
+
+class _InvoiceLike:
+    """Adapter so the existing generate_combined_bills_pdf (written for
+    Invoice objects) can be reused as-is for Purchase objects, which have
+    the same shape but different attribute names (purchase_date vs
+    invoice_date, etc). Avoids touching or duplicating that function."""
+    def __init__(self, date, number, amount):
+        self.invoice_date = date
+        self.invoice_number = number
+        self.amount = amount
+
+
+@router.get("/monthly/purchase-summary-pdf")
+def export_monthly_purchase_summary(
+    month: str = Query(..., description="YYYY-MM"),
+    supplier_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    supplier_purchase_pairs = _get_month_purchases(db, month, supplier_id)
+
+    company_settings = db.query(models.CompanySettings).filter(models.CompanySettings.id == "default").first()
+    logo_bytes = None
+    if company_settings and company_settings.logo_url:
+        logo_bytes = storage.get_cached_logo_bytes(company_settings.logo_url)
+
+    pdf_bytes = export_lib.generate_monthly_purchase_summary_pdf(
+        _month_label(month), supplier_purchase_pairs, company_settings, logo_bytes
+    )
+    filename = f"purchase_summary_{month}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/monthly/purchase-detailed-excel")
+def export_monthly_purchase_detailed_excel(
+    month: str = Query(..., description="YYYY-MM"),
+    supplier_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    supplier_purchase_pairs = _get_month_purchases(db, month, supplier_id)
+    xlsx_bytes = export_lib.generate_purchase_excel_export(supplier_purchase_pairs)
+    filename = f"purchase_detail_{month}.xlsx"
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/monthly/purchase-bills-pdf")
+def export_monthly_purchase_bills_pdf(
+    month: str = Query(..., description="YYYY-MM"),
+    supplier_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    supplier_purchase_pairs = _get_month_purchases(db, month, supplier_id)
+
+    all_purchases = []
+    for supplier, purchases in supplier_purchase_pairs:
+        for pu in purchases:
+            all_purchases.append((pu, supplier.name))
+    all_purchases.sort(key=lambda x: x[0].purchase_date or datetime.min.date())
+
+    purchases_with_images = []
+    for pu, supplier_name in all_purchases:
+        image_bytes = storage.read_image_bytes(pu.raw_image_url) if pu.raw_image_url else None
+        adapted = _InvoiceLike(pu.purchase_date, pu.purchase_number, pu.amount)
+        purchases_with_images.append((adapted, supplier_name, image_bytes))
+
+    pdf_bytes = export_lib.generate_combined_bills_pdf(purchases_with_images)
+    filename = f"purchase_bills_{month}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

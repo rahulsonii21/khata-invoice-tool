@@ -86,6 +86,14 @@ export const api = {
   downloadMonthlyBillsPdf: (month, partyId) =>
     downloadFile(`/api/export/monthly/bills-pdf?month=${month}${partyId ? `&party_id=${partyId}` : ''}`),
 
+  // Purchase (payables) monthly reports
+  downloadMonthlyPurchaseSummaryPdf: (month, supplierId) =>
+    downloadFile(`/api/export/monthly/purchase-summary-pdf?month=${month}${supplierId ? `&supplier_id=${supplierId}` : ''}`),
+  downloadMonthlyPurchaseDetailedExcel: (month, supplierId) =>
+    downloadFile(`/api/export/monthly/purchase-detailed-excel?month=${month}${supplierId ? `&supplier_id=${supplierId}` : ''}`),
+  downloadMonthlyPurchaseBillsPdf: (month, supplierId) =>
+    downloadFile(`/api/export/monthly/purchase-bills-pdf?month=${month}${supplierId ? `&supplier_id=${supplierId}` : ''}`),
+
   // Backup
   listBackups: () => request('/api/backup'),
   runBackupNow: () => request('/api/backup/run', { method: 'POST' }),

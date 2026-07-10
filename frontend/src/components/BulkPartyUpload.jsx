@@ -6,7 +6,7 @@ import { formatINR, compressImage } from '../utils'
 let idCounter = 0
 const nextId = () => `b${++idCounter}`
 
-export default function BulkPartyUpload() {
+export default function BulkPartyUpload({ direction = 'customer' }) {
   const [parties, setParties] = useState([])
   const [partyName, setPartyName] = useState('')
   const [locked, setLocked] = useState(false) // party chosen, ready to drop files
@@ -16,9 +16,16 @@ export default function BulkPartyUpload() {
   const [viewingId, setViewingId] = useState(null)
   const processingRef = useRef(false)
 
+  const isCustomer = direction === 'customer'
+  const entityLabel = isCustomer ? 'party' : 'supplier'
+
   useEffect(() => {
-    api.listParties().then(setParties).catch(() => {})
-  }, [])
+    setLocked(false)
+    setQueue([])
+    setPartyName('')
+    const list = isCustomer ? api.listParties() : api.listSuppliers()
+    list.then(setParties).catch(() => {})
+  }, [direction])
 
   const addFiles = useCallback((fileList) => {
     const items = Array.from(fileList).map((file) => ({
@@ -86,23 +93,37 @@ export default function BulkPartyUpload() {
     if (!partyName.trim()) return
     setSavingAll(true)
     try {
-      let party = parties.find((p) => p.name.toLowerCase() === partyName.toLowerCase())
-      if (!party) {
-        party = await api.createParty({ name: partyName.trim() })
-        setParties((p) => [...p, party])
+      let entity = parties.find((p) => p.name.toLowerCase() === partyName.toLowerCase())
+      if (!entity) {
+        entity = isCustomer
+          ? await api.createParty({ name: partyName.trim() })
+          : await api.createSupplier({ name: partyName.trim() })
+        setParties((p) => [...p, entity])
       }
 
       const toSave = queue.filter((f) => f.status === 'done' && f.fields.amount)
       for (const item of toSave) {
-        await api.createInvoice({
-          party_id: party.id,
-          invoice_number: item.fields.invoice_number || null,
-          invoice_date: item.fields.invoice_date || null,
-          amount: parseFloat(item.fields.amount),
-          gst_amount: item.fields.gst_amount ? parseFloat(item.fields.gst_amount) : null,
-          raw_image_url: item.imageUrl,
-          ocr_confidence: item.confidence,
-        })
+        if (isCustomer) {
+          await api.createInvoice({
+            party_id: entity.id,
+            invoice_number: item.fields.invoice_number || null,
+            invoice_date: item.fields.invoice_date || null,
+            amount: parseFloat(item.fields.amount),
+            gst_amount: item.fields.gst_amount ? parseFloat(item.fields.gst_amount) : null,
+            raw_image_url: item.imageUrl,
+            ocr_confidence: item.confidence,
+          })
+        } else {
+          await api.createPurchase({
+            supplier_id: entity.id,
+            purchase_number: item.fields.invoice_number || null,
+            purchase_date: item.fields.invoice_date || null,
+            amount: parseFloat(item.fields.amount),
+            gst_amount: item.fields.gst_amount ? parseFloat(item.fields.gst_amount) : null,
+            raw_image_url: item.imageUrl,
+            ocr_confidence: item.confidence,
+          })
+        }
         setQueue((q) => q.map((f) => (f.id === item.id ? { ...f, status: 'saved' } : f)))
         setSavedTotal((c) => c + 1)
       }
@@ -119,7 +140,7 @@ export default function BulkPartyUpload() {
       <div className="mx-auto max-w-md rounded-lg border border-line bg-white p-6">
         <h2 className="mb-1 font-display text-lg font-semibold text-ink">Whose bills are these?</h2>
         <p className="mb-4 text-sm text-ink-faint">
-          Pick or create the party once - every photo you drop after this gets filed under them.
+          Pick or create the {entityLabel} once - every photo you drop after this gets filed under them.
         </p>
         <PartyAutocomplete value={partyName} onChange={setPartyName} parties={parties} />
         <button
@@ -148,11 +169,11 @@ export default function BulkPartyUpload() {
           }}
           className="text-xs text-ink-faint hover:text-ink"
         >
-          Change party
+          Change {entityLabel}
         </button>
       </div>
 
-      <Dropzone onFiles={addFiles} />
+      <Dropzone onFiles={addFiles} entityLabel={entityLabel} />
 
       {queue.length > 0 && (
         <div className="mt-4 space-y-2">
@@ -196,7 +217,7 @@ export default function BulkPartyUpload() {
   )
 }
 
-function Dropzone({ onFiles }) {
+function Dropzone({ onFiles, entityLabel = 'party' }) {
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef(null)
 
@@ -217,7 +238,7 @@ function Dropzone({ onFiles }) {
         dragOver ? 'border-ink bg-sage' : 'border-line bg-white'
       }`}
     >
-      <p className="font-display text-base text-ink">Drop all the bills for this party here</p>
+      <p className="font-display text-base text-ink">Drop all the bills for this {entityLabel} here</p>
       <p className="mt-1 text-sm text-ink-faint">Select multiple files at once - each is read automatically</p>
       <input
         ref={inputRef}

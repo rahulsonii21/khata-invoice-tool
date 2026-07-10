@@ -17,16 +17,21 @@ const STATUS_LABEL = {
 }
 
 export default function UploadReview() {
+  const [direction, setDirection] = useState('customer') // 'customer' | 'supplier'
   const [mode, setMode] = useState('photo') // 'photo' | 'manual' | 'bulk'
   const [queue, setQueue] = useState([])
   const [activeId, setActiveId] = useState(null)
   const [parties, setParties] = useState([])
+  const [suppliers, setSuppliers] = useState([])
   const [savedCount, setSavedCount] = useState(0)
   const processingRef = useRef(false)
 
   useEffect(() => {
     api.listParties().then(setParties).catch(() => {})
+    api.listSuppliers().then(setSuppliers).catch(() => {})
   }, [])
+
+  const entities = direction === 'customer' ? parties : suppliers
 
   const addFiles = useCallback((fileList) => {
     const items = Array.from(fileList).map((file) => ({
@@ -90,25 +95,41 @@ export default function UploadReview() {
   async function handleSave(item) {
     const e = item.edited
     if (!e.party_name || !e.amount) {
-      alert('Party name and amount are required.')
+      alert(`${direction === 'customer' ? 'Party' : 'Supplier'} name and amount are required.`)
       return
     }
 
-    let party = parties.find((p) => p.name.toLowerCase() === e.party_name.toLowerCase())
-    if (!party) {
-      party = await api.createParty({ name: e.party_name })
-      setParties((p) => [...p, party])
-    }
+    let entity = entities.find((x) => x.name.toLowerCase() === e.party_name.toLowerCase())
 
-    await api.createInvoice({
-      party_id: party.id,
-      invoice_number: e.invoice_number || null,
-      invoice_date: e.invoice_date || null,
-      amount: parseFloat(e.amount),
-      gst_amount: e.gst_amount ? parseFloat(e.gst_amount) : null,
-      raw_image_url: item.result?.image_url ?? null,
-      ocr_confidence: item.result?.confidence ?? null,
-    })
+    if (direction === 'customer') {
+      if (!entity) {
+        entity = await api.createParty({ name: e.party_name })
+        setParties((p) => [...p, entity])
+      }
+      await api.createInvoice({
+        party_id: entity.id,
+        invoice_number: e.invoice_number || null,
+        invoice_date: e.invoice_date || null,
+        amount: parseFloat(e.amount),
+        gst_amount: e.gst_amount ? parseFloat(e.gst_amount) : null,
+        raw_image_url: item.result?.image_url ?? null,
+        ocr_confidence: item.result?.confidence ?? null,
+      })
+    } else {
+      if (!entity) {
+        entity = await api.createSupplier({ name: e.party_name })
+        setSuppliers((s) => [...s, entity])
+      }
+      await api.createPurchase({
+        supplier_id: entity.id,
+        purchase_number: e.invoice_number || null,
+        purchase_date: e.invoice_date || null,
+        amount: parseFloat(e.amount),
+        gst_amount: e.gst_amount ? parseFloat(e.gst_amount) : null,
+        raw_image_url: item.result?.image_url ?? null,
+        ocr_confidence: item.result?.confidence ?? null,
+      })
+    }
 
     setQueue((q) => q.map((f) => (f.id === item.id ? { ...f, status: 'saved' } : f)))
 
@@ -125,15 +146,36 @@ export default function UploadReview() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
       <header className="mb-6">
-        <h1 className="font-display text-2xl font-semibold text-ink">Upload Invoices</h1>
+        <h1 className="font-display text-2xl font-semibold text-ink">
+          Upload {direction === 'customer' ? 'Invoices' : 'Purchase Bills'}
+        </h1>
         <p className="mt-1 text-sm text-ink-faint">
           {mode === 'photo'
-            ? "Drop invoice photos or scans below. Each is read automatically, then you confirm before it's saved."
+            ? "Drop bill photos or scans below. Each is read automatically, then you confirm before it's saved."
             : mode === 'bulk'
-            ? 'Pick one party, then drop all their bills at once - review and save them together.'
-            : 'Enter invoice details directly - useful when a photo is unclear or unavailable.'}
+            ? `Pick one ${direction === 'customer' ? 'party' : 'supplier'}, then drop all their bills at once - review and save them together.`
+            : 'Enter details directly - useful when a photo is unclear or unavailable.'}
         </p>
       </header>
+
+      <div className="mb-4 inline-flex rounded-md border border-line bg-white p-1">
+        <button
+          onClick={() => setDirection('customer')}
+          className={`rounded px-3 py-1.5 text-sm font-medium ${
+            direction === 'customer' ? 'bg-ink text-paper' : 'text-ink-faint'
+          }`}
+        >
+          Customer bill (I sold this)
+        </button>
+        <button
+          onClick={() => setDirection('supplier')}
+          className={`rounded px-3 py-1.5 text-sm font-medium ${
+            direction === 'supplier' ? 'bg-ink text-paper' : 'text-ink-faint'
+          }`}
+        >
+          Supplier bill (I bought this)
+        </button>
+      </div>
 
       <div className="mb-6 inline-flex rounded-md border border-line bg-white p-1">
         <button
@@ -150,7 +192,7 @@ export default function UploadReview() {
             mode === 'bulk' ? 'bg-ink text-paper' : 'text-ink-faint'
           }`}
         >
-          Bulk for one party
+          Bulk for one {direction === 'customer' ? 'party' : 'supplier'}
         </button>
         <button
           onClick={() => setMode('manual')}
@@ -162,14 +204,14 @@ export default function UploadReview() {
         </button>
       </div>
 
-      {mode === 'bulk' && <BulkPartyUpload />}
+      {mode === 'bulk' && <BulkPartyUpload direction={direction} />}
 
       {mode === 'manual' && (
         <div>
-          <ManualEntry onSaved={() => setSavedCount((c) => c + 1)} />
+          <ManualEntry direction={direction} onSaved={() => setSavedCount((c) => c + 1)} />
           {savedCount > 0 && (
             <p className="mt-3 text-center text-sm text-ink-light">
-              {savedCount} invoice{savedCount > 1 ? 's' : ''} saved this session.
+              {savedCount} {direction === 'customer' ? 'invoice' : 'purchase'}{savedCount > 1 ? 's' : ''} saved this session.
             </p>
           )}
         </div>
@@ -186,14 +228,15 @@ export default function UploadReview() {
                 <ReviewPanel
                   key={active.id}
                   item={active}
-                  parties={parties}
+                  parties={entities}
+                  direction={direction}
                   onChange={updateField}
                   onSave={() => handleSave(active)}
                 />
               ) : (
                 <div className="flex items-center justify-center rounded-lg border border-dashed border-line bg-white/50 p-12 text-sm text-ink-faint">
                   {queue.every((f) => f.status === 'saved')
-                    ? 'All invoices saved.'
+                    ? 'All done.'
                     : 'Waiting for extraction to finish…'}
                 </div>
               )}
@@ -273,7 +316,7 @@ function QueueList({ queue, activeId, onSelect }) {
   )
 }
 
-function ReviewPanel({ item, parties, onChange, onSave }) {
+function ReviewPanel({ item, parties, direction, onChange, onSave }) {
   if (item.status === 'error') {
     return (
       <div className="rounded-lg border border-rust/40 bg-white p-6">
@@ -307,21 +350,21 @@ function ReviewPanel({ item, parties, onChange, onSave }) {
       </div>
 
       <div className="space-y-3">
-        <Field label="Party">
+        <Field label={direction === 'customer' ? 'Party' : 'Supplier'}>
           <PartyAutocomplete
             value={e.party_name}
             onChange={(v) => onChange('party_name', v)}
             parties={parties}
           />
         </Field>
-        <Field label="Invoice number">
+        <Field label={direction === 'customer' ? 'Invoice number' : "Supplier's bill number"}>
           <input
             className="w-full rounded-md border border-line px-3 py-2 text-sm"
             value={e.invoice_number}
             onChange={(ev) => onChange('invoice_number', ev.target.value)}
           />
         </Field>
-        <Field label="Invoice date">
+        <Field label={direction === 'customer' ? 'Invoice date' : 'Purchase date'}>
           <input
             type="date"
             className="w-full rounded-md border border-line px-3 py-2 text-sm"

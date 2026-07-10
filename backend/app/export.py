@@ -368,3 +368,141 @@ def generate_excel_export(parties_with_invoices) -> bytes:
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Purchase ledger (payables) reports - mirror the sales-side functions above,
+# with the correct labels/attribute names for Supplier/Purchase objects
+# rather than Party/Invoice. The combined-bills-PDF function above is reused
+# as-is via a small adapter in the router (it's generic enough already).
+# ---------------------------------------------------------------------------
+def generate_monthly_purchase_summary_pdf(month_label, supplier_purchase_pairs, company_settings=None, logo_bytes=None) -> bytes:
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        topMargin=20 * mm, bottomMargin=20 * mm,
+        leftMargin=18 * mm, rightMargin=18 * mm,
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("Title", parent=styles["Heading1"], textColor=INK, fontSize=18, spaceAfter=2)
+    subtitle_style = ParagraphStyle("Subtitle", parent=styles["Normal"], textColor=colors.HexColor("#7C9089"), fontSize=10)
+    letterhead_style = ParagraphStyle("Letterhead", parent=styles["Normal"], textColor=INK, fontSize=9, alignment=TA_RIGHT)
+
+    elements = []
+
+    if company_settings and company_settings.company_name:
+        if logo_bytes:
+            try:
+                logo_img = RLImage(io.BytesIO(logo_bytes), width=20 * mm, height=20 * mm)
+                logo_img.hAlign = "RIGHT"
+                elements.append(logo_img)
+                elements.append(Spacer(1, 2 * mm))
+            except Exception:
+                pass
+        elements.append(Paragraph(f"<b>{company_settings.company_name}</b>", letterhead_style))
+        elements.append(Spacer(1, 6 * mm))
+
+    elements.append(Paragraph(f"Monthly Purchase Report — {month_label}", title_style))
+    elements.append(Paragraph(f"Generated: {datetime.now().strftime('%d %b %Y')}", subtitle_style))
+    elements.append(Spacer(1, 8 * mm))
+
+    grand_purchased = sum(sum(pu.amount for pu in purs) for _, purs in supplier_purchase_pairs)
+    grand_paid = sum(sum(p.amount for pu in purs for p in pu.payments) for _, purs in supplier_purchase_pairs)
+
+    summary_data = [["Total Purchased", "Total Paid", "Payable (this month's bills)"]]
+    summary_data.append([_fmt_inr(grand_purchased), _fmt_inr(grand_paid), _fmt_inr(grand_purchased - grand_paid)])
+    summary_table = Table(summary_data, colWidths=[52 * mm, 52 * mm, 52 * mm])
+    summary_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), SAGE),
+        ("TEXTCOLOR", (0, 0), (-1, 0), INK),
+        ("FONTSIZE", (0, 0), (-1, 0), 9),
+        ("FONTSIZE", (0, 1), (-1, 1), 13),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
+        ("TOPPADDING", (0, 1), (-1, 1), 4),
+        ("BOTTOMPADDING", (0, 1), (-1, 1), 10),
+        ("GRID", (0, 0), (-1, -1), 0.5, LINE),
+    ]))
+    elements.append(summary_table)
+    elements.append(Spacer(1, 8 * mm))
+
+    rows = [["Supplier", "Purchased", "Paid", "Payable", "# Bills"]]
+    for supplier, purs in sorted(supplier_purchase_pairs, key=lambda x: sum(p.amount for p in x[1]), reverse=True):
+        if not purs:
+            continue
+        purchased = sum(p.amount for p in purs)
+        paid = sum(pay.amount for p in purs for pay in p.payments)
+        rows.append([supplier.name, _fmt_inr(purchased), _fmt_inr(paid), _fmt_inr(purchased - paid), str(len(purs))])
+
+    if len(rows) > 1:
+        t = Table(rows, colWidths=[62 * mm, 32 * mm, 32 * mm, 32 * mm, 18 * mm])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), SAGE),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+            ("GRID", (0, 0), (-1, -1), 0.5, LINE),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(t)
+    else:
+        elements.append(Paragraph("No purchases in this period.", styles["Normal"]))
+
+    doc.build(elements)
+    return buf.getvalue()
+
+
+def generate_purchase_excel_export(suppliers_with_purchases) -> bytes:
+    """
+    suppliers_with_purchases: list of (supplier, purchases) tuples.
+    Same structure as generate_excel_export, for the payables side.
+    """
+    wb = Workbook()
+
+    ws_summary = wb.active
+    ws_summary.title = "Summary"
+    ws_summary.append(["Supplier", "Phone", "Total Purchased", "Total Paid", "Payable"])
+    for supplier, purchases in suppliers_with_purchases:
+        total_purchased = sum(p.amount for p in purchases)
+        total_paid = sum(pay.amount for p in purchases for pay in p.payments)
+        ws_summary.append([
+            supplier.name, supplier.phone or "", total_purchased, total_paid,
+            total_purchased - total_paid,
+        ])
+    _style_header(ws_summary)
+    _autosize(ws_summary)
+
+    ws_pur = wb.create_sheet("Purchases")
+    ws_pur.append([
+        "Supplier", "Bill Number", "Purchase Date", "Amount", "GST Amount",
+        "Total Paid", "Payable", "Status", "Remarks",
+    ])
+    for supplier, purchases in suppliers_with_purchases:
+        for pu in purchases:
+            ws_pur.append([
+                supplier.name, pu.purchase_number or "",
+                pu.purchase_date.isoformat() if pu.purchase_date else "",
+                pu.amount, pu.gst_amount or 0,
+                pu.total_paid, pu.outstanding,
+                pu.status.value.replace("_", " ").title(),
+                pu.remarks or "",
+            ])
+    _style_header(ws_pur)
+    _autosize(ws_pur)
+
+    ws_pay = wb.create_sheet("Payments")
+    ws_pay.append(["Supplier", "Bill Number", "Payment Date", "Amount", "Mode", "Remarks"])
+    for supplier, purchases in suppliers_with_purchases:
+        for pu in purchases:
+            for p in pu.payments:
+                ws_pay.append([
+                    supplier.name, pu.purchase_number or "",
+                    p.payment_date.isoformat(), p.amount, p.mode.value, p.remarks or "",
+                ])
+    _style_header(ws_pay)
+    _autosize(ws_pay)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
