@@ -18,6 +18,18 @@ async function request(path, options = {}) {
 
   const res = await fetch(`${BASE_URL}${path}`, { headers, ...options })
 
+  // The service worker tags responses it served from its offline cache (used
+  // when the network genuinely failed) - surface this so the UI can show a
+  // clear "you're viewing cached data" banner rather than silently showing
+  // possibly-stale numbers as if they were current.
+  console.log('[DEBUG]', path, 'X-Served-From-Cache header:', res.headers.get('X-Served-From-Cache'))
+  if (res.headers.get('X-Served-From-Cache') === 'true') {
+    console.log('[DEBUG] dispatching khata-offline-data')
+    window.dispatchEvent(new Event('khata-offline-data'))
+  } else if (res.ok) {
+    window.dispatchEvent(new Event('khata-online-data'))
+  }
+
   if (res.status === 401) {
     // Session expired or invalid - clear it and force back to the login screen
     clearToken()
@@ -98,6 +110,7 @@ export const api = {
   listBackups: () => request('/api/backup'),
   runBackupNow: () => request('/api/backup/run', { method: 'POST' }),
   downloadBackup: (filename) => downloadFile(`/api/backup/${filename}/download`),
+  restoreBackup: (filename) => request(`/api/backup/${filename}/restore`, { method: 'POST', body: JSON.stringify({ confirm: 'RESTORE' }) }),
 
   // Company settings
   getCompanySettings: () => request('/api/settings/company'),

@@ -36,12 +36,24 @@ export default function App() {
   const [needsLogin, setNeedsLogin] = useState(false)
   const [logoUrl, setLogoUrl] = useState(null)
   const [companyName, setCompanyName] = useState(null)
+  const [showingCachedData, setShowingCachedData] = useState(false)
 
   function checkAuth() {
-    api.getAuthStatus().then((status) => {
-      setNeedsLogin(status.required && !getToken())
-      setAuthChecked(true)
-    })
+    api.getAuthStatus()
+      .then((status) => {
+        setNeedsLogin(status.required && !getToken())
+        setAuthChecked(true)
+      })
+      .catch(() => {
+        // Can't reach the backend (offline, or it's briefly down). If we
+        // already have a token from an earlier successful login this
+        // session, proceed as authenticated so cached data can still be
+        // viewed - getting stuck on an infinite loading screen the moment
+        // the network hiccups would be strictly worse than optimistically
+        // letting a previously-logged-in session continue.
+        setNeedsLogin(false)
+        setAuthChecked(true)
+      })
   }
 
   useEffect(() => {
@@ -50,6 +62,21 @@ export default function App() {
     const handler = () => setNeedsLogin(true)
     window.addEventListener('khata-auth-required', handler)
     return () => window.removeEventListener('khata-auth-required', handler)
+  }, [])
+
+  useEffect(() => {
+    // The service worker tags responses served from its offline cache -
+    // this is a more reliable signal than navigator.onLine alone, since it
+    // reflects whether YOUR actual requests are succeeding, not just
+    // whether the network interface reports as connected.
+    const onOffline = () => setShowingCachedData(true)
+    const onOnline = () => setShowingCachedData(false)
+    window.addEventListener('khata-offline-data', onOffline)
+    window.addEventListener('khata-online-data', onOnline)
+    return () => {
+      window.removeEventListener('khata-offline-data', onOffline)
+      window.removeEventListener('khata-online-data', onOnline)
+    }
   }, [])
 
   useEffect(() => {
@@ -80,6 +107,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-paper pb-16 sm:pb-0">
+      {showingCachedData && (
+        <div className="bg-marigold px-4 py-2 text-center text-sm font-medium text-white">
+          You're offline — showing the last synced data. New entries won't save until you're back online.
+        </div>
+      )}
       <nav className="border-b border-line bg-white px-4 py-3">
         <div className="mx-auto flex max-w-5xl items-center gap-4 overflow-x-auto">
           <div className="flex flex-shrink-0 items-center gap-2">
