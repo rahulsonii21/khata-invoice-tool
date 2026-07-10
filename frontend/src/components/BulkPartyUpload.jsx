@@ -184,6 +184,7 @@ export default function BulkPartyUpload({ direction = 'customer' }) {
               onChange={(field, value) => updateField(item.id, field, value)}
               onRemove={() => removeItem(item.id)}
               onView={() => setViewingId(item.id)}
+              entityLabel={entityLabel}
             />
           ))}
 
@@ -211,6 +212,7 @@ export default function BulkPartyUpload({ direction = 'customer' }) {
           onClose={() => setViewingId(null)}
           onNavigate={setViewingId}
           onChange={updateField}
+          entityLabel={entityLabel}
         />
       )}
     </div>
@@ -253,7 +255,8 @@ function Dropzone({ onFiles, entityLabel = 'party' }) {
   )
 }
 
-function BulkRow({ item, onChange, onRemove, onView }) {
+function BulkRow({ item, onChange, onRemove, onView, entityLabel = 'party' }) {
+  const numberPlaceholder = entityLabel === 'party' ? 'Invoice #' : 'Bill #'
   const isSaved = item.status === 'saved'
   const isError = item.status === 'error'
   const isProcessing = item.status === 'pending' || item.status === 'processing'
@@ -278,7 +281,7 @@ function BulkRow({ item, onChange, onRemove, onView }) {
       {item.status === 'done' || isSaved ? (
         <>
           <input
-            placeholder="Invoice #"
+            placeholder={numberPlaceholder}
             value={item.fields.invoice_number}
             onChange={(e) => onChange('invoice_number', e.target.value)}
             disabled={isSaved}
@@ -323,7 +326,10 @@ function BulkRow({ item, onChange, onRemove, onView }) {
   )
 }
 
-function ImageModal({ queue, viewingId, onClose, onNavigate, onChange }) {
+function ImageModal({ queue, viewingId, onClose, onNavigate, onChange, entityLabel = 'party' }) {
+  const isCustomer = entityLabel === 'party'
+  const numberLabel = isCustomer ? 'Invoice number' : "Supplier's bill number"
+  const dateLabel = isCustomer ? 'Invoice date' : 'Purchase date'
   const item = queue.find((f) => f.id === viewingId)
   if (!item) return null
 
@@ -362,7 +368,7 @@ function ImageModal({ queue, viewingId, onClose, onNavigate, onChange }) {
             </button>
           </div>
 
-          <ModalField label="Invoice number">
+          <ModalField label={numberLabel}>
             <input
               value={item.fields.invoice_number}
               onChange={(e) => onChange(item.id, 'invoice_number', e.target.value)}
@@ -370,7 +376,7 @@ function ImageModal({ queue, viewingId, onClose, onNavigate, onChange }) {
               className="w-full rounded-md border border-line px-3 py-2 text-sm disabled:bg-sage/20"
             />
           </ModalField>
-          <ModalField label="Invoice date">
+          <ModalField label={dateLabel}>
             <input
               type="date"
               value={item.fields.invoice_date}
