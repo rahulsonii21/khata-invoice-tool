@@ -108,6 +108,7 @@ export const api = {
 
   // Backup
   listBackups: () => request('/api/backup'),
+  getDriveStatus: () => request('/api/backup/drive-status'),
   runBackupNow: () => request('/api/backup/run', { method: 'POST' }),
   downloadBackup: (filename) => downloadFile(`/api/backup/${filename}/download`),
   restoreBackup: (filename) => request(`/api/backup/${filename}/restore`, { method: 'POST', body: JSON.stringify({ confirm: 'RESTORE' }) }),

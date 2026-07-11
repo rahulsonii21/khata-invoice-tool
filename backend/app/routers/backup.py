@@ -19,10 +19,20 @@ def list_backups():
     return backup.list_backups()
 
 
+@router.get("/drive-status")
+def google_drive_status():
+    return backup.get_google_drive_status()
+
+
 @router.post("/run")
 def run_backup_now():
-    filename = backup.create_backup()
-    return {"filename": filename, "message": "Backup created"}
+    result = backup.create_backup()
+    return {
+        "filename": result["filename"],
+        "message": "Backup created",
+        "destinations": result["destinations"],
+        "errors": result["errors"],
+    }
 
 
 @router.get("/{filename}/download")

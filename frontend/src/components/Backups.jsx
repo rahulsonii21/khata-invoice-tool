@@ -16,9 +16,12 @@ export default function Backups() {
   const [backups, setBackups] = useState([])
   const [running, setRunning] = useState(false)
   const [restoreTarget, setRestoreTarget] = useState(null)
+  const [driveStatus, setDriveStatus] = useState(null)
+  const [lastRunResult, setLastRunResult] = useState(null)
 
   function reload() {
     api.listBackups().then(setBackups).catch(() => {})
+    api.getDriveStatus().then(setDriveStatus).catch(() => {})
   }
 
   useEffect(() => {
@@ -27,8 +30,10 @@ export default function Backups() {
 
   async function handleRunNow() {
     setRunning(true)
+    setLastRunResult(null)
     try {
-      await api.runBackupNow()
+      const result = await api.runBackupNow()
+      setLastRunResult(result)
       reload()
     } finally {
       setRunning(false)
@@ -41,7 +46,7 @@ export default function Backups() {
         <div>
           <h1 className="font-display text-2xl font-semibold text-ink">Backups</h1>
           <p className="mt-1 text-sm text-ink-faint">
-            Runs automatically every night. The last 14 are kept.
+            Runs automatically every 6 hours. The last 14 are kept on each destination.
           </p>
         </div>
         <button
@@ -52,6 +57,41 @@ export default function Backups() {
           {running ? 'Backing up…' : 'Back up now'}
         </button>
       </header>
+
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="rounded-lg border border-line bg-white p-3 text-sm">
+          <p className="text-xs font-medium text-ink-faint">Supabase Storage</p>
+          <p className="mt-1 text-ink">Primary backup destination</p>
+        </div>
+        <div className={`rounded-lg border p-3 text-sm ${driveStatus?.configured ? 'border-line bg-white' : 'border-dashed border-line bg-sage/20'}`}>
+          <p className="text-xs font-medium text-ink-faint">Google Drive</p>
+          {driveStatus?.configured ? (
+            driveStatus.error ? (
+              <p className="mt-1 text-rust">Configured, but not working: {driveStatus.error}</p>
+            ) : (
+              <p className="mt-1 text-ink">Connected — {driveStatus.count} backup{driveStatus.count !== 1 ? 's' : ''} stored</p>
+            )
+          ) : (
+            <p className="mt-1 text-ink-faint">Not set up — see DEPLOYMENT.md to add this as a second destination</p>
+          )}
+        </div>
+      </div>
+
+      {lastRunResult && (
+        <div className="mb-4 rounded-lg border border-line bg-white p-3 text-sm">
+          <p className="font-medium text-ink">Last backup: {lastRunResult.filename}</p>
+          <p className="mt-1 text-ink-faint">
+            Supabase: {lastRunResult.destinations.supabase ? '✓ saved' : '✗ not saved'}
+            {' · '}
+            Google Drive: {lastRunResult.destinations.google_drive ? '✓ saved' : lastRunResult.destinations.local ? '✗ (fell back to local disk)' : '✗ not configured'}
+          </p>
+          {Object.keys(lastRunResult.errors).length > 0 && (
+            <p className="mt-1 text-xs text-rust">
+              {Object.entries(lastRunResult.errors).map(([dest, err]) => `${dest}: ${err}`).join(' · ')}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-lg border border-line bg-white">
         <table className="w-full text-sm">

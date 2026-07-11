@@ -100,6 +100,14 @@ def generate_bill(payload: GenerateBillRequest, db: Session = Depends(get_db)):
     if not party:
         raise HTTPException(404, "Party not found")
 
+    if not payload.items:
+        raise HTTPException(422, "At least one item is required")
+
+    total_amount = sum(item.amount for item in payload.items)
+    grand_total = total_amount * (1 + (payload.cgst_pct + payload.sgst_pct + payload.igst_pct) / 100)
+    if grand_total <= 0:
+        raise HTTPException(422, "Bill total must be greater than zero")
+
     company = _build_company_dict(db)
 
     try:
@@ -115,9 +123,6 @@ def generate_bill(payload: GenerateBillRequest, db: Session = Depends(get_db)):
         image_url = storage.save_generated_bill(image_bytes)
     except Exception as e:
         raise HTTPException(502, f"Could not save generated bill: {e}")
-
-    total_amount = sum(item.amount for item in payload.items)
-    grand_total = total_amount * (1 + (payload.cgst_pct + payload.sgst_pct + payload.igst_pct) / 100)
 
     invoice_date = datetime.strptime(payload.bill_date, "%Y-%m-%d").date() if payload.bill_date else None
     due_date = datetime.strptime(payload.due_date, "%Y-%m-%d").date() if payload.due_date else None

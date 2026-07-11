@@ -89,3 +89,26 @@ At your usage level (2 people, personal bookkeeping), this should stay entirely 
 - Gemini API free tier: should cover your invoice volume
 
 The one thing to watch is Supabase's free tier pausing a project after a week of no activity - if that happens, just log in and click "Restore" on the project, takes a minute.
+
+## 6. Set up Google Drive as a second backup destination (optional, recommended)
+
+Backups already go to Supabase Storage automatically. This adds Google Drive
+as a genuinely independent second copy - if Supabase ever has an outage,
+gets misconfigured, or its free tier project gets paused, your backups still
+exist somewhere else entirely.
+
+1. Go to **console.cloud.google.com** and create a new project (or use an existing one)
+2. In the search bar, find **"Google Drive API"** and click **Enable**
+3. Go to **APIs & Services → Credentials → Create Credentials → Service Account**
+   - Give it any name (e.g. "khata-backup")
+   - Skip the optional role/permissions steps, click **Done**
+4. Click on the service account you just created → **Keys** tab → **Add Key → Create new key → JSON**
+   - This downloads a `.json` file - keep it safe, don't share it publicly
+5. Open **Google Drive** in your browser, create a new folder (e.g. "Khata Backups")
+6. Right-click that folder → **Share** → paste in the service account's email address (looks like `khata-backup@your-project.iam.gserviceaccount.com`, found in the JSON file as `client_email`) → give it **Editor** access
+7. Open the folder, copy its ID from the URL: `https://drive.google.com/drive/folders/`**`THIS_PART_IS_THE_FOLDER_ID`**
+8. On Render → your backend service → Environment Variables, add:
+   - `GOOGLE_DRIVE_FOLDER_ID` = the folder ID from step 7
+   - `GOOGLE_SERVICE_ACCOUNT_JSON` = the **entire contents** of the JSON file from step 4, pasted as one line
+
+Once set, the Backups tab in the app will show "Connected" under Google Drive, and every future backup saves to both destinations automatically.

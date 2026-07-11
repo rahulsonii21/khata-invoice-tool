@@ -1,23 +1,24 @@
 """
 Auto-backup: bundles a full database export (via data_export.py - portable
 JSON, works for both SQLite and Postgres) and all stored invoice images into
-a single timestamped zip. Runs nightly via the scheduler in scheduler.py,
-and can also be triggered manually from the /api/backup/run endpoint.
+a single timestamped zip.
 
-IMPORTANT CORRECTION: an earlier version of this file skipped the database
-entirely when running on Postgres, with a comment claiming "Supabase keeps
-its own automatic backups separately." That claim was wrong - Supabase's
-free tier (which this app runs on) has ZERO automatic backups; daily
-backups and point-in-time recovery are Pro-plan-only features. This means
-production had no real database backup at all until this was fixed to
-always include a full data export, regardless of database type.
+Uploads to TWO independent destinations when configured - Supabase Storage
+and Google Drive - so a single provider's outage, billing lapse, or
+misconfiguration can't take out your only copy. Falls back to local disk if
+neither is configured (fine for local dev, NOT safe for production, since
+Render's disk is ephemeral and vanishes on every restart/redeploy).
 
-Uses Supabase Storage when configured (needed in production - Render's disk
-is ephemeral, so a backup only living on local disk would vanish on the next
-restart/redeploy, defeating the point). Falls back to local disk otherwise.
+Triggered two ways: an in-process nightly scheduler (scheduler.py) as a
+best-effort trigger, AND an external GitHub Actions cron job that calls
+POST /api/backup/run on a schedule - the external trigger is the one that
+actually matters for reliability, since the in-process scheduler only fires
+if the app process happens to be alive at that exact moment (if Render's
+free tier had put it to sleep, the in-process job would silently never run
+at all - not a partial backup, no backup whatsoever that night).
 
 Retention: keeps the most recent BACKUP_RETENTION_COUNT backups and deletes
-older ones automatically, so storage usage doesn't grow unbounded.
+older ones automatically on each destination independently.
 """
 import os
 import io
@@ -27,7 +28,7 @@ from pathlib import Path
 from datetime import datetime
 
 from .database import SessionLocal
-from . import supabase_client, data_export
+from . import supabase_client, data_export, google_drive
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 LOCAL_BACKUPS_DIR = BACKEND_ROOT / "backups"
@@ -61,23 +62,48 @@ def _build_zip_bytes() -> bytes:
     return buf.getvalue()
 
 
-def create_backup() -> str:
-    """Creates a new backup archive and returns its filename.
-    Uploads to Supabase Storage when configured; otherwise saves locally.
-    Enforces retention either way."""
+def create_backup() -> dict:
+    """Creates a new backup archive and uploads it to every configured
+    destination independently - a failure in one (e.g. Drive being
+    temporarily unreachable) never prevents the other from succeeding.
+    Returns a summary of where it landed, so callers/logs can tell if a
+    destination silently isn't working."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     archive_name = f"backup_{timestamp}.zip"
     zip_bytes = _build_zip_bytes()
 
+    destinations = {"local": False, "supabase": False, "google_drive": False}
+    errors = {}
+
     if supabase_client.is_configured():
-        # Avoid same-second collisions the same way the local path does
-        existing = {o["name"] for o in supabase_client.list_objects("backups")}
-        suffix = 1
-        while archive_name in existing:
-            archive_name = f"backup_{timestamp}_{suffix}.zip"
-            suffix += 1
-        supabase_client.upload_bytes(f"backups/{archive_name}", zip_bytes, "application/zip")
-    else:
+        try:
+            existing = {o["name"] for o in supabase_client.list_objects("backups")}
+            suffix = 1
+            name = archive_name
+            while name in existing:
+                name = f"backup_{timestamp}_{suffix}.zip"
+                suffix += 1
+            supabase_client.upload_bytes(f"backups/{name}", zip_bytes, "application/zip")
+            destinations["supabase"] = True
+        except Exception as e:
+            errors["supabase"] = str(e)
+
+    if google_drive.is_configured():
+        try:
+            google_drive.upload_backup(archive_name, zip_bytes)
+            destinations["google_drive"] = True
+        except Exception as e:
+            errors["google_drive"] = str(e)
+
+    # Local disk is the safety-net fallback - used when neither destination
+    # is configured (local dev), AND when destinations ARE configured but
+    # every single one actually failed (e.g. bad/expired credentials, a
+    # network blip) - a backup with zero surviving copies anywhere is exactly
+    # the failure this whole system exists to prevent, so this must trigger
+    # on real failure, not just on absence of configuration.
+    any_destination_configured = supabase_client.is_configured() or google_drive.is_configured()
+    any_destination_succeeded = destinations["supabase"] or destinations["google_drive"]
+    if not any_destination_configured or not any_destination_succeeded:
         archive_path = LOCAL_BACKUPS_DIR / archive_name
         suffix = 1
         while archive_path.exists():
@@ -86,9 +112,10 @@ def create_backup() -> str:
             suffix += 1
         with open(archive_path, "wb") as f:
             f.write(zip_bytes)
+        destinations["local"] = True
 
     _enforce_retention()
-    return archive_name
+    return {"filename": archive_name, "destinations": destinations, "errors": errors}
 
 
 def _enforce_retention():
@@ -97,7 +124,16 @@ def _enforce_retention():
         # list_objects already sorts newest-first
         for old in objects[BACKUP_RETENTION_COUNT:]:
             supabase_client.delete_object(f"backups/{old['name']}")
-    else:
+
+    if google_drive.is_configured():
+        try:
+            files = google_drive.list_backups()  # already newest-first
+            for old in files[BACKUP_RETENTION_COUNT:]:
+                google_drive.delete_backup(old["id"])
+        except Exception:
+            pass  # retention cleanup failing shouldn't break the backup itself
+
+    if not supabase_client.is_configured() and not google_drive.is_configured():
         backups = sorted(LOCAL_BACKUPS_DIR.glob("backup_*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
         for old in backups[BACKUP_RETENTION_COUNT:]:
             old.unlink()
@@ -126,6 +162,21 @@ def list_backups() -> list[dict]:
         }
         for p in backups
     ]
+
+
+def get_google_drive_status() -> dict:
+    """Lightweight status check for the Backups screen - shows whether Drive
+    redundancy is actually configured and working, without needing to merge
+    two separate file lists into one (Supabase remains the primary list used
+    for download/restore; Drive is the redundant copy you'd only reach for
+    if Supabase itself were unavailable)."""
+    if not google_drive.is_configured():
+        return {"configured": False, "count": 0}
+    try:
+        files = google_drive.list_backups()
+        return {"configured": True, "count": len(files)}
+    except Exception as e:
+        return {"configured": True, "count": 0, "error": str(e)}
 
 
 def get_local_backup_path(filename: str):

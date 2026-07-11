@@ -14,8 +14,10 @@ scheduler = BackgroundScheduler()
 
 def _run_nightly_backup():
     try:
-        name = backup.create_backup()
-        logger.info(f"[auto-backup] created {name}")
+        result = backup.create_backup()
+        logger.info(f"[auto-backup] created {result['filename']} -> {result['destinations']}")
+        if result["errors"]:
+            logger.error(f"[auto-backup] some destinations failed: {result['errors']}")
     except Exception as e:
         logger.error(f"[auto-backup] failed: {e}")
 

@@ -1,0 +1,32 @@
+name: Scheduled Backup
+
+# Triggers a backup every 6 hours from OUTSIDE the app itself. This matters:
+# the app also has an in-process nightly scheduler (scheduler.py), but that
+# only fires if the Render process happens to be alive at exactly 2 AM. If
+# the free tier had put it to sleep at that moment, the backup would
+# silently never run - not a partial backup, none at all. This workflow
+# doesn't have that problem: GitHub's scheduler runs independently, and the
+# HTTP request itself will wake a sleeping Render service if needed.
+#
+# Also increases backup frequency from once nightly to 4x/day, narrowing
+# the window of data you could lose if something went wrong between backups.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger backup
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST https://khata-invoice-tool-1.onrender.com/api/backup/run)
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          echo "Response: $body"
+          if [ "$http_code" != "200" ]; then
+            echo "::error::Backup trigger failed with HTTP $http_code"
+            exit 1
+          fi
