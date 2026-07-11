@@ -25,5 +25,6 @@ jobs:
           response=$(curl -s -o /dev/null -w "%{http_code}" https://khata-invoice-tool-1.onrender.com/api/health)
           echo "Health check returned: $response"
           if [ "$response" != "200" ]; then
-            echo "Warning: expected 200, got $response"
+            echo "::error::Expected 200, got $response - the backend may be down"
+            exit 1
           fi
