@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .database import Base, engine, ensure_columns_exist
+from .database import Base, engine, ensure_columns_exist, ensure_index_exists
 from .routers import parties, invoices, payments, dashboard, ocr, export, backup, settings, uploads, bills, auth_router, suppliers, purchases, purchase_payments
 from . import scheduler, auth
 
@@ -40,6 +40,18 @@ ensure_columns_exist("invoices", {
     "igst_pct": "FLOAT",
     "due_date": "DATE",
 })
+
+# Retroactively add indexes on frequently-filtered columns for databases that
+# already existed before these were added to the model - index=True on a
+# Column only takes effect for tables create_all() builds fresh.
+ensure_index_exists("invoices", "party_id")
+ensure_index_exists("invoices", "invoice_date")
+ensure_index_exists("invoices", "due_date")
+ensure_index_exists("payments", "invoice_id")
+ensure_index_exists("purchases", "supplier_id")
+ensure_index_exists("purchases", "purchase_date")
+ensure_index_exists("purchases", "due_date")
+ensure_index_exists("purchase_payments", "purchase_id")
 
 UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)

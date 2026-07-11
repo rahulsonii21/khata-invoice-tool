@@ -1,12 +1,12 @@
 from datetime import date, datetime
 from typing import Optional, List
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .models import InvoiceStatus, PaymentMode
 
 
 # ---------- Party ----------
 class PartyCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1)
     phone: Optional[str] = None
     gstin: Optional[str] = None
     address: Optional[str] = None
@@ -14,6 +14,14 @@ class PartyCreate(BaseModel):
     pincode: Optional[str] = None
     email: Optional[str] = None
     notes: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v):
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Name cannot be blank")
+        return stripped
 
 
 class PartyUpdate(BaseModel):
@@ -47,14 +55,14 @@ class PartyOut(BaseModel):
 
 # ---------- Payment ----------
 class PaymentCreate(BaseModel):
-    amount: float
+    amount: float = Field(gt=0)
     payment_date: date
     mode: PaymentMode = PaymentMode.other
     remarks: Optional[str] = None
 
 
 class PaymentUpdate(BaseModel):
-    amount: Optional[float] = None
+    amount: Optional[float] = Field(default=None, gt=0)
     payment_date: Optional[date] = None
     mode: Optional[PaymentMode] = None
     remarks: Optional[str] = None
@@ -79,7 +87,7 @@ class InvoiceCreate(BaseModel):
     invoice_number: Optional[str] = None
     invoice_date: Optional[date] = None
     due_date: Optional[date] = None
-    amount: float
+    amount: float = Field(gt=0)
     gst_amount: Optional[float] = None
     raw_image_url: Optional[str] = None
     ocr_confidence: Optional[float] = None
@@ -93,7 +101,7 @@ class InvoiceUpdate(BaseModel):
     invoice_number: Optional[str] = None
     invoice_date: Optional[date] = None
     due_date: Optional[date] = None
-    amount: Optional[float] = None
+    amount: Optional[float] = Field(default=None, gt=0)
     gst_amount: Optional[float] = None
     remarks: Optional[str] = None
     shipped_by: Optional[str] = None
@@ -176,7 +184,7 @@ class CompanySettingsOut(BaseModel):
 
 # ---------- Purchase ledger (suppliers/purchases/purchase payments) ----------
 class SupplierCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1)
     phone: Optional[str] = None
     gstin: Optional[str] = None
     address: Optional[str] = None
@@ -184,6 +192,14 @@ class SupplierCreate(BaseModel):
     pincode: Optional[str] = None
     email: Optional[str] = None
     notes: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v):
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Name cannot be blank")
+        return stripped
 
 
 class SupplierUpdate(BaseModel):
@@ -216,14 +232,14 @@ class SupplierOut(BaseModel):
 
 
 class PurchasePaymentCreate(BaseModel):
-    amount: float
+    amount: float = Field(gt=0)
     payment_date: date
     mode: PaymentMode = PaymentMode.other
     remarks: Optional[str] = None
 
 
 class PurchasePaymentUpdate(BaseModel):
-    amount: Optional[float] = None
+    amount: Optional[float] = Field(default=None, gt=0)
     payment_date: Optional[date] = None
     mode: Optional[PaymentMode] = None
     remarks: Optional[str] = None
@@ -247,7 +263,7 @@ class PurchaseCreate(BaseModel):
     purchase_number: Optional[str] = None
     purchase_date: Optional[date] = None
     due_date: Optional[date] = None
-    amount: float
+    amount: float = Field(gt=0)
     gst_amount: Optional[float] = None
     raw_image_url: Optional[str] = None
     ocr_confidence: Optional[float] = None
@@ -258,7 +274,7 @@ class PurchaseUpdate(BaseModel):
     purchase_number: Optional[str] = None
     purchase_date: Optional[date] = None
     due_date: Optional[date] = None
-    amount: Optional[float] = None
+    amount: Optional[float] = Field(default=None, gt=0)
     gst_amount: Optional[float] = None
     remarks: Optional[str] = None
     changed_by: Optional[str] = None

@@ -12,6 +12,30 @@ from .. import export as export_lib
 router = APIRouter(prefix="/api/export", tags=["export"])
 
 
+def _content_disposition(filename: str) -> dict:
+    """
+    Builds a Content-Disposition header that's safe for ANY filename,
+    including Hindi/Devanagari or other non-Latin-1 text (e.g. a party or
+    supplier named in Hindi script - a completely realistic case for this
+    business, not an edge case). HTTP headers can only contain Latin-1
+    bytes; naively embedding a Unicode name directly caused every export
+    for such a party to crash with a 500 error (UnicodeEncodeError).
+
+    Fix follows RFC 6266: an ASCII-safe fallback name in the plain
+    `filename=` parameter (for older clients), plus a UTF-8 percent-encoded
+    `filename*=` parameter so modern browsers show the real name correctly.
+    """
+    import re
+    from urllib.parse import quote
+
+    ascii_fallback = filename.encode("ascii", errors="ignore").decode("ascii").strip()
+    ascii_fallback = re.sub(r"[^\w.\-]", "_", ascii_fallback) or "download"
+
+    return {
+        "Content-Disposition": f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{quote(filename)}"
+    }
+
+
 def _month_bounds(month: str):
     """month: 'YYYY-MM' -> (first_day, last_day) as date objects."""
     year, mon = (int(x) for x in month.split("-"))
@@ -146,7 +170,7 @@ def export_party_pdf(party_id: str, db: Session = Depends(get_db)):
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=_content_disposition(filename),
     )
 
 
@@ -169,7 +193,7 @@ def export_party_excel(party_id: str, db: Session = Depends(get_db)):
     return Response(
         content=xlsx_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=_content_disposition(filename),
     )
 
 

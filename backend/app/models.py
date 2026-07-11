@@ -60,10 +60,10 @@ class Invoice(Base):
     __tablename__ = "invoices"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
-    party_id = Column(UUID(as_uuid=False), ForeignKey("parties.id"), nullable=False)
+    party_id = Column(UUID(as_uuid=False), ForeignKey("parties.id"), nullable=False, index=True)
     invoice_number = Column(String, nullable=True)
-    invoice_date = Column(Date, nullable=True)
-    due_date = Column(Date, nullable=True)
+    invoice_date = Column(Date, nullable=True, index=True)
+    due_date = Column(Date, nullable=True, index=True)
     amount = Column(Float, nullable=False, default=0.0)
     gst_amount = Column(Float, nullable=True)
     raw_image_url = Column(String, nullable=True)
@@ -111,7 +111,7 @@ class Payment(Base):
     __tablename__ = "payments"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
-    invoice_id = Column(UUID(as_uuid=False), ForeignKey("invoices.id"), nullable=False)
+    invoice_id = Column(UUID(as_uuid=False), ForeignKey("invoices.id"), nullable=False, index=True)
     amount = Column(Float, nullable=False)
     payment_date = Column(Date, nullable=False, default=date.today)
     mode = Column(SAEnum(PaymentMode), default=PaymentMode.other)
@@ -193,10 +193,10 @@ class Purchase(Base):
     __tablename__ = "purchases"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
-    supplier_id = Column(UUID(as_uuid=False), ForeignKey("suppliers.id"), nullable=False)
+    supplier_id = Column(UUID(as_uuid=False), ForeignKey("suppliers.id"), nullable=False, index=True)
     purchase_number = Column(String, nullable=True)  # the supplier's own bill/invoice number
-    purchase_date = Column(Date, nullable=True)
-    due_date = Column(Date, nullable=True)
+    purchase_date = Column(Date, nullable=True, index=True)
+    due_date = Column(Date, nullable=True, index=True)
     amount = Column(Float, nullable=False, default=0.0)
     gst_amount = Column(Float, nullable=True)
     raw_image_url = Column(String, nullable=True)  # photo of the supplier's bill
@@ -236,7 +236,7 @@ class PurchasePayment(Base):
     __tablename__ = "purchase_payments"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
-    purchase_id = Column(UUID(as_uuid=False), ForeignKey("purchases.id"), nullable=False)
+    purchase_id = Column(UUID(as_uuid=False), ForeignKey("purchases.id"), nullable=False, index=True)
     amount = Column(Float, nullable=False)
     payment_date = Column(Date, nullable=False, default=date.today)
     mode = Column(SAEnum(PaymentMode), default=PaymentMode.other)
