@@ -1,0 +1,29 @@
+name: Keep Backend Warm
+
+# Render's free tier sleeps a service after 15 minutes with no incoming
+# requests, and waking it back up takes 30-60 seconds - noticeable every
+# time the app is opened after a gap. Pinging the health endpoint every
+# 10 minutes (comfortably under that 15-minute window) keeps it warm during
+# normal usage hours, without needing a paid Render tier or a third-party
+# monitoring service.
+#
+# This only works reliably on a PUBLIC repo - GitHub gives public repos
+# unlimited free Actions minutes, while private repos get a limited monthly
+# quota that a ping this frequent would burn through quickly.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: # lets you trigger it manually from the Actions tab too
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://khata-invoice-tool-1.onrender.com/api/health)
+          echo "Health check returned: $response"
+          if [ "$response" != "200" ]; then
+            echo "Warning: expected 200, got $response"
+          fi
