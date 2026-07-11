@@ -35,15 +35,25 @@ jobs:
           # Run for ~5h45m internally, pinging every 8 minutes. Comfortably
           # overlaps with the next scheduled job (~4h later), so coverage
           # never actually has a gap even if a trigger is delayed.
+          #
+          # IMPORTANT: GitHub Actions runs this with `set -e` by default, so
+          # a bare `curl` that times out or fails at the network level (not
+          # just a bad HTTP status - an actual connection failure) aborts
+          # the ENTIRE script immediately. This bit us on the very first
+          # real run: Render was cold, curl's own --max-time timeout fired,
+          # and the whole 5h45m job died after ~30 seconds instead of
+          # continuing to retry. The `|| echo "000"` below is what actually
+          # matters here - it converts a curl-level failure into a plain
+          # "000" status string instead of letting it kill the script.
           end_time=$((SECONDS + 345 * 60))
           count=0
           while [ $SECONDS -lt $end_time ]; do
-            response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://khata-invoice-tool-1.onrender.com/api/health)
+            response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 https://khata-invoice-tool-1.onrender.com/api/health 2>/dev/null) || response="000"
             count=$((count + 1))
             echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Ping #$count -> HTTP $response"
             if [ "$response" != "200" ]; then
-              echo "::warning::Ping #$count got HTTP $response instead of 200"
+              echo "::warning::Ping #$count got $response instead of 200 (may just be a cold start still waking up)"
             fi
-            sleep 480 # 8 minutes
+            sleep 480 || true
           done
           echo "Completed $count pings this run."
