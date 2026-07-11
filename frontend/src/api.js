@@ -156,7 +156,8 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pin }),
     }).then(async (r) => {
-      if (!r.ok) throw new Error('Incorrect PIN')
+      if (r.status === 401) throw new Error('WRONG_PIN')
+      if (!r.ok) throw new Error('SERVER_ERROR')
       return r.json()
     }),
 }

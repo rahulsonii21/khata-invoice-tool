@@ -37,6 +37,7 @@ export default function App() {
   const [logoUrl, setLogoUrl] = useState(null)
   const [companyName, setCompanyName] = useState(null)
   const [showingCachedData, setShowingCachedData] = useState(false)
+  const [slowStart, setSlowStart] = useState(false)
 
   function checkAuth() {
     api.getAuthStatus()
@@ -58,10 +59,18 @@ export default function App() {
 
   useEffect(() => {
     checkAuth()
+    // If the very first request is still pending after 3s, it's very likely
+    // Render's free tier waking a sleeping server (a real 30-60s cold start,
+    // not something the frontend can speed up) - switch to an honest message
+    // instead of leaving a bare, indefinite spinner that looks broken.
+    const timer = setTimeout(() => setSlowStart(true), 3000)
     // Any 401 anywhere in the app re-triggers the login screen
     const handler = () => setNeedsLogin(true)
     window.addEventListener('khata-auth-required', handler)
-    return () => window.removeEventListener('khata-auth-required', handler)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('khata-auth-required', handler)
+    }
   }, [])
 
   useEffect(() => {
@@ -98,7 +107,16 @@ export default function App() {
   }
 
   if (!authChecked) {
-    return <div className="flex min-h-screen items-center justify-center bg-paper text-sm text-ink-faint">Loading…</div>
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-paper px-4 text-center">
+        <span className="stamp px-3 py-1 text-sm font-semibold text-ink">खाता</span>
+        <p className="text-sm text-ink-faint">
+          {slowStart
+            ? "Waking up the server — this can take up to a minute if the app hasn't been used in a while."
+            : 'Loading…'}
+        </p>
+      </div>
+    )
   }
 
   if (needsLogin) {
