@@ -19,6 +19,8 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     steps:
       - name: Trigger backup
         run: |
@@ -26,7 +28,29 @@ jobs:
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | sed '$d')
           echo "Response: $body"
-          if [ "$http_code" != "200" ]; then
-            echo "::error::Backup trigger failed with HTTP $http_code"
+          echo "HTTP_CODE=$http_code" >> "$GITHUB_ENV"
+          echo "$body" > /tmp/backup_response_body.txt
+
+      - name: DEBUG - post diagnostic to an issue (temporary, will be removed)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "HTTP code: ${HTTP_CODE}"
+            echo ""
+            echo "Response body:"
+            echo '```'
+            cat /tmp/backup_response_body.txt
+            echo '```'
+          } > /tmp/issue_body.txt
+          gh issue create --repo "${{ github.repository }}" \
+            --title "DEBUG: backup trigger diagnostic $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --body-file /tmp/issue_body.txt
+
+      - name: Fail if not 200
+        run: |
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Backup trigger failed with HTTP $HTTP_CODE"
             exit 1
           fi
