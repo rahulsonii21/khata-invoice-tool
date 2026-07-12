@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session, selectinload
 from typing import List, Optional
 
-from .. import models, schemas
+from .. import models, schemas, auth
 from ..database import get_db
 from ..audit import log_change
 
@@ -48,12 +48,13 @@ def get_invoice(invoice_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=schemas.InvoiceOut)
-def create_invoice(payload: schemas.InvoiceCreate, db: Session = Depends(get_db)):
+def create_invoice(payload: schemas.InvoiceCreate, request: Request, db: Session = Depends(get_db)):
     party = db.query(models.Party).filter(models.Party.id == payload.party_id).first()
     if not party:
         raise HTTPException(404, "Party not found - create the party first")
 
     data = payload.model_dump()
+    data["created_by"] = auth.get_current_username(request)
 
     # Auto-fill due_date from the company's default credit terms, if the
     # caller didn't specify one explicitly and we have both an invoice date
@@ -73,12 +74,12 @@ def create_invoice(payload: schemas.InvoiceCreate, db: Session = Depends(get_db)
 
 
 @router.put("/{invoice_id}", response_model=schemas.InvoiceOut)
-def update_invoice(invoice_id: str, payload: schemas.InvoiceUpdate, db: Session = Depends(get_db)):
+def update_invoice(invoice_id: str, payload: schemas.InvoiceUpdate, request: Request, db: Session = Depends(get_db)):
     invoice = db.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
     if not invoice:
         raise HTTPException(404, "Invoice not found")
 
-    changed_by = payload.changed_by
+    changed_by = auth.get_current_username(request) or payload.changed_by
     updates = payload.model_dump(exclude={"changed_by"}, exclude_unset=True)
     for field, new_value in updates.items():
         old_value = getattr(invoice, field)
@@ -123,6 +124,7 @@ def _to_out(invoice: models.Invoice) -> schemas.InvoiceOut:
         cgst_pct=invoice.cgst_pct,
         sgst_pct=invoice.sgst_pct,
         igst_pct=invoice.igst_pct,
+        created_by=invoice.created_by,
         status=invoice.status,
         created_at=invoice.created_at,
         total_paid=invoice.total_paid,

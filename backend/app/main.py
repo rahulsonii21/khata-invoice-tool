@@ -39,7 +39,19 @@ ensure_columns_exist("invoices", {
     "sgst_pct": "FLOAT",
     "igst_pct": "FLOAT",
     "due_date": "DATE",
+    "created_by": "VARCHAR",
 })
+ensure_columns_exist("parties", {
+    "address": "TEXT",
+    "city": "VARCHAR",
+    "pincode": "VARCHAR",
+    "email": "VARCHAR",
+    "created_by": "VARCHAR",
+})
+ensure_columns_exist("payments", {"created_by": "VARCHAR"})
+ensure_columns_exist("suppliers", {"created_by": "VARCHAR"})
+ensure_columns_exist("purchases", {"created_by": "VARCHAR"})
+ensure_columns_exist("purchase_payments", {"created_by": "VARCHAR"})
 
 # Retroactively add indexes on frequently-filtered columns for databases that
 # already existed before these were added to the model - index=True on a
@@ -52,6 +64,16 @@ ensure_index_exists("purchases", "supplier_id")
 ensure_index_exists("purchases", "purchase_date")
 ensure_index_exists("purchases", "due_date")
 ensure_index_exists("purchase_payments", "purchase_id")
+
+# Prime the in-memory "is auth required" cache at startup, since it's derived
+# from whether any user accounts exist in the database - the middleware
+# checks this on every request and shouldn't have to query the DB each time.
+from .database import SessionLocal
+_startup_db = SessionLocal()
+try:
+    auth.refresh_auth_required_cache(_startup_db)
+finally:
+    _startup_db.close()
 
 UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)

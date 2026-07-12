@@ -1,14 +1,20 @@
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const TOKEN_KEY = 'khata_token'
+const DISPLAY_NAME_KEY = 'khata_display_name'
 
 export function getToken() {
   return sessionStorage.getItem(TOKEN_KEY)
 }
-export function setToken(token) {
+export function setToken(token, displayName) {
   sessionStorage.setItem(TOKEN_KEY, token)
+  if (displayName) sessionStorage.setItem(DISPLAY_NAME_KEY, displayName)
+}
+export function getDisplayName() {
+  return sessionStorage.getItem(DISPLAY_NAME_KEY)
 }
 export function clearToken() {
   sessionStorage.removeItem(TOKEN_KEY)
+  sessionStorage.removeItem(DISPLAY_NAME_KEY)
 }
 
 async function request(path, options = {}) {
@@ -151,16 +157,21 @@ export const api = {
 
   // Auth
   getAuthStatus: () => fetch(`${BASE_URL}/api/auth/status`).then((r) => r.json()),
-  login: (pin) =>
+  login: (username, password) =>
     fetch(`${BASE_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin }),
+      body: JSON.stringify({ username, password }),
     }).then(async (r) => {
-      if (r.status === 401) throw new Error('WRONG_PIN')
+      if (r.status === 401) throw new Error('WRONG_CREDENTIALS')
       if (!r.ok) throw new Error('SERVER_ERROR')
       return r.json()
     }),
+
+  // User accounts (multi-user)
+  registerUser: (data) => request('/api/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+  listUsers: () => request('/api/auth/users'),
+  deactivateUser: (userId) => request(`/api/auth/users/${userId}`, { method: 'DELETE' }),
 }
 
 export async function fetchFileBlob(path) {

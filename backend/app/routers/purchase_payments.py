@@ -1,9 +1,9 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List
 
-from .. import models, schemas
+from .. import models, schemas, auth
 from ..database import get_db
 from ..audit import log_change
 
@@ -20,12 +20,14 @@ def list_purchase_payments(purchase_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=schemas.PurchasePaymentOut)
-def add_purchase_payment(purchase_id: str, payload: schemas.PurchasePaymentCreate, db: Session = Depends(get_db)):
+def add_purchase_payment(purchase_id: str, payload: schemas.PurchasePaymentCreate, request: Request, db: Session = Depends(get_db)):
     purchase = db.query(models.Purchase).filter(models.Purchase.id == purchase_id).first()
     if not purchase:
         raise HTTPException(404, "Purchase not found")
 
-    payment = models.PurchasePayment(purchase_id=purchase_id, **payload.model_dump())
+    data = payload.model_dump()
+    data["created_by"] = auth.get_current_username(request)
+    payment = models.PurchasePayment(purchase_id=purchase_id, **data)
     db.add(payment)
     db.flush()
 
@@ -36,12 +38,12 @@ def add_purchase_payment(purchase_id: str, payload: schemas.PurchasePaymentCreat
 
 
 @standalone_router.put("/{payment_id}", response_model=schemas.PurchasePaymentOut)
-def update_purchase_payment(payment_id: str, payload: schemas.PurchasePaymentUpdate, db: Session = Depends(get_db)):
+def update_purchase_payment(payment_id: str, payload: schemas.PurchasePaymentUpdate, request: Request, db: Session = Depends(get_db)):
     payment = db.query(models.PurchasePayment).filter(models.PurchasePayment.id == payment_id).first()
     if not payment:
         raise HTTPException(404, "Payment not found")
 
-    changed_by = payload.changed_by
+    changed_by = auth.get_current_username(request) or payload.changed_by
     updates = payload.model_dump(exclude={"changed_by"}, exclude_unset=True)
     for field, new_value in updates.items():
         old_value = getattr(payment, field)

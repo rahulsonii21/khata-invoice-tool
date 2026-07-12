@@ -1,9 +1,9 @@
 from difflib import SequenceMatcher
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session, selectinload
 from typing import List
 
-from .. import models, schemas
+from .. import models, schemas, auth
 from ..database import get_db
 from ..audit import log_change
 
@@ -52,8 +52,10 @@ def get_supplier(supplier_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=schemas.SupplierOut)
-def create_supplier(payload: schemas.SupplierCreate, db: Session = Depends(get_db)):
-    supplier = models.Supplier(**payload.model_dump())
+def create_supplier(payload: schemas.SupplierCreate, request: Request, db: Session = Depends(get_db)):
+    data = payload.model_dump()
+    data["created_by"] = auth.get_current_username(request)
+    supplier = models.Supplier(**data)
     db.add(supplier)
     db.commit()
     db.refresh(supplier)
@@ -61,12 +63,12 @@ def create_supplier(payload: schemas.SupplierCreate, db: Session = Depends(get_d
 
 
 @router.put("/{supplier_id}", response_model=schemas.SupplierOut)
-def update_supplier(supplier_id: str, payload: schemas.SupplierUpdate, db: Session = Depends(get_db)):
+def update_supplier(supplier_id: str, payload: schemas.SupplierUpdate, request: Request, db: Session = Depends(get_db)):
     supplier = db.query(models.Supplier).filter(models.Supplier.id == supplier_id).first()
     if not supplier:
         raise HTTPException(404, "Supplier not found")
 
-    changed_by = payload.changed_by
+    changed_by = auth.get_current_username(request) or payload.changed_by
     updates = payload.model_dump(exclude={"changed_by"}, exclude_unset=True)
     for field, new_value in updates.items():
         old_value = getattr(supplier, field)
@@ -101,6 +103,7 @@ def _to_out(supplier: models.Supplier) -> schemas.SupplierOut:
         email=supplier.email,
         notes=supplier.notes,
         created_at=supplier.created_at,
+        created_by=supplier.created_by,
         total_purchased=supplier.total_purchased,
         total_paid=supplier.total_paid,
         outstanding=supplier.outstanding,

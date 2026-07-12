@@ -1,9 +1,9 @@
 from difflib import SequenceMatcher
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session, selectinload
 from typing import List
 
-from .. import models, schemas
+from .. import models, schemas, auth
 from ..database import get_db
 from ..audit import log_change
 
@@ -62,8 +62,10 @@ def get_party(party_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=schemas.PartyOut)
-def create_party(payload: schemas.PartyCreate, db: Session = Depends(get_db)):
-    party = models.Party(**payload.model_dump())
+def create_party(payload: schemas.PartyCreate, request: Request, db: Session = Depends(get_db)):
+    data = payload.model_dump()
+    data["created_by"] = auth.get_current_username(request)
+    party = models.Party(**data)
     db.add(party)
     db.commit()
     db.refresh(party)
@@ -71,12 +73,12 @@ def create_party(payload: schemas.PartyCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{party_id}", response_model=schemas.PartyOut)
-def update_party(party_id: str, payload: schemas.PartyUpdate, db: Session = Depends(get_db)):
+def update_party(party_id: str, payload: schemas.PartyUpdate, request: Request, db: Session = Depends(get_db)):
     party = db.query(models.Party).filter(models.Party.id == party_id).first()
     if not party:
         raise HTTPException(404, "Party not found")
 
-    changed_by = payload.changed_by
+    changed_by = auth.get_current_username(request) or payload.changed_by
     updates = payload.model_dump(exclude={"changed_by"}, exclude_unset=True)
     for field, new_value in updates.items():
         old_value = getattr(party, field)
@@ -111,6 +113,7 @@ def _to_out(party: models.Party) -> schemas.PartyOut:
         email=party.email,
         notes=party.notes,
         created_at=party.created_at,
+        created_by=party.created_by,
         total_invoiced=party.total_invoiced,
         total_received=party.total_received,
         outstanding=party.outstanding,

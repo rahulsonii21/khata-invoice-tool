@@ -3,7 +3,7 @@ import Dashboard from './components/Dashboard'
 import PartyList from './components/PartyList'
 import PartyDetail from './components/PartyDetail'
 import Login from './components/Login'
-import { api, getToken } from './api'
+import { api, getToken, clearToken, getDisplayName } from './api'
 import { resolveImageUrl } from './utils'
 
 // Dashboard/Parties are what most visits actually use, so they stay in the
@@ -16,6 +16,7 @@ const GenerateBill = lazy(() => import('./components/GenerateBill'))
 const Reports = lazy(() => import('./components/Reports'))
 const SupplierList = lazy(() => import('./components/SupplierList'))
 const SupplierDetail = lazy(() => import('./components/SupplierDetail'))
+const Accounts = lazy(() => import('./components/Accounts'))
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -26,6 +27,7 @@ const TABS = [
   { id: 'reports', label: 'Reports' },
   { id: 'backups', label: 'Backups' },
   { id: 'settings', label: 'Settings' },
+  { id: 'accounts', label: 'Accounts' },
 ]
 
 export default function App() {
@@ -106,6 +108,11 @@ export default function App() {
     setTab('suppliers')
   }
 
+  function handleLogout() {
+    clearToken()
+    setNeedsLogin(true)
+  }
+
   if (!authChecked) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-paper px-4 text-center">
@@ -157,6 +164,14 @@ export default function App() {
               </button>
             ))}
           </div>
+          {getDisplayName() && (
+            <div className="ml-auto flex flex-shrink-0 items-center gap-2 text-xs text-ink-faint">
+              <span>{getDisplayName()}</span>
+              <button onClick={handleLogout} className="font-medium text-ink-light hover:text-ink">
+                Log out
+              </button>
+            </div>
+          )}
         </div>
       </nav>
 
@@ -179,6 +194,7 @@ export default function App() {
         {tab === 'backups' && <Backups />}
         {tab === 'settings' && <CompanySettings />}
         {tab === 'reports' && <Reports />}
+        {tab === 'accounts' && <Accounts onFirstAccountCreated={() => setNeedsLogin(false)} />}
       </Suspense>
 
       {/* Mobile bottom tab bar */}

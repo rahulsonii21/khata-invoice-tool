@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session, selectinload
 from typing import List, Optional
 
-from .. import models, schemas
+from .. import models, schemas, auth
 from ..database import get_db
 from ..audit import log_change
 
@@ -48,12 +48,14 @@ def get_purchase(purchase_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=schemas.PurchaseOut)
-def create_purchase(payload: schemas.PurchaseCreate, db: Session = Depends(get_db)):
+def create_purchase(payload: schemas.PurchaseCreate, request: Request, db: Session = Depends(get_db)):
     supplier = db.query(models.Supplier).filter(models.Supplier.id == payload.supplier_id).first()
     if not supplier:
         raise HTTPException(404, "Supplier not found - create the supplier first")
 
-    purchase = models.Purchase(**payload.model_dump())
+    data = payload.model_dump()
+    data["created_by"] = auth.get_current_username(request)
+    purchase = models.Purchase(**data)
     purchase.refresh_status()
     db.add(purchase)
     db.commit()
@@ -62,12 +64,12 @@ def create_purchase(payload: schemas.PurchaseCreate, db: Session = Depends(get_d
 
 
 @router.put("/{purchase_id}", response_model=schemas.PurchaseOut)
-def update_purchase(purchase_id: str, payload: schemas.PurchaseUpdate, db: Session = Depends(get_db)):
+def update_purchase(purchase_id: str, payload: schemas.PurchaseUpdate, request: Request, db: Session = Depends(get_db)):
     purchase = db.query(models.Purchase).filter(models.Purchase.id == purchase_id).first()
     if not purchase:
         raise HTTPException(404, "Purchase not found")
 
-    changed_by = payload.changed_by
+    changed_by = auth.get_current_username(request) or payload.changed_by
     updates = payload.model_dump(exclude={"changed_by"}, exclude_unset=True)
     for field, new_value in updates.items():
         old_value = getattr(purchase, field)
@@ -106,6 +108,7 @@ def _to_out(purchase: models.Purchase) -> schemas.PurchaseOut:
         remarks=purchase.remarks,
         status=purchase.status,
         created_at=purchase.created_at,
+        created_by=purchase.created_by,
         total_paid=purchase.total_paid,
         outstanding=purchase.outstanding,
         payments=[schemas.PurchasePaymentOut.model_validate(p) for p in purchase.payments],

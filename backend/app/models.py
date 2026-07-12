@@ -40,6 +40,7 @@ class Party(Base):
     email = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String, nullable=True)  # display name of whoever created it, or None if auth wasn't active
 
     invoices = relationship("Invoice", back_populates="party", cascade="all, delete-orphan")
 
@@ -79,6 +80,7 @@ class Invoice(Base):
     igst_pct = Column(Float, nullable=True)
     status = Column(SAEnum(InvoiceStatus), default=InvoiceStatus.unpaid)
     created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String, nullable=True)  # display name of whoever created it, or None if auth wasn't active
 
     party = relationship("Party", back_populates="invoices")
     payments = relationship("Payment", back_populates="invoice", cascade="all, delete-orphan")
@@ -117,6 +119,7 @@ class Payment(Base):
     mode = Column(SAEnum(PaymentMode), default=PaymentMode.other)
     remarks = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String, nullable=True)  # display name of whoever created it, or None if auth wasn't active
     edited_at = Column(DateTime, nullable=True)
 
     invoice = relationship("Invoice", back_populates="payments")
@@ -173,6 +176,7 @@ class Supplier(Base):
     email = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String, nullable=True)  # display name of whoever created it, or None if auth wasn't active
 
     purchases = relationship("Purchase", back_populates="supplier", cascade="all, delete-orphan")
 
@@ -204,6 +208,7 @@ class Purchase(Base):
     remarks = Column(Text, nullable=True)
     status = Column(SAEnum(InvoiceStatus), default=InvoiceStatus.unpaid)
     created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String, nullable=True)  # display name of whoever created it, or None if auth wasn't active
 
     supplier = relationship("Supplier", back_populates="purchases")
     payments = relationship("PurchasePayment", back_populates="purchase", cascade="all, delete-orphan")
@@ -242,6 +247,27 @@ class PurchasePayment(Base):
     mode = Column(SAEnum(PaymentMode), default=PaymentMode.other)
     remarks = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String, nullable=True)  # display name of whoever created it, or None if auth wasn't active
     edited_at = Column(DateTime, nullable=True)
 
     purchase = relationship("Purchase", back_populates="payments")
+
+
+class AppUser(Base):
+    """
+    A real per-person account, replacing the old single-shared-PIN model.
+    Everyone has equal permissions by design (this is a small trusted team,
+    not an org needing role-based access control) - the point of separate
+    accounts is purely accountability: knowing WHO added or changed a given
+    invoice/payment/party, which the audit log (audit.py) already tracks via
+    a changed_by field that used to just say the generic string "user" for
+    everyone. Now it carries the real logged-in person's name.
+    """
+    __tablename__ = "app_users"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    username = Column(String, nullable=False, unique=True, index=True)
+    display_name = Column(String, nullable=False)
+    password_hash = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

@@ -48,6 +48,7 @@ class PartyOut(BaseModel):
     email: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime
+    created_by: Optional[str] = None
     total_invoiced: float = 0
     total_received: float = 0
     outstanding: float = 0
@@ -78,6 +79,7 @@ class PaymentOut(BaseModel):
     mode: PaymentMode
     remarks: Optional[str] = None
     created_at: datetime
+    created_by: Optional[str] = None
     edited_at: Optional[datetime] = None
 
 
@@ -133,6 +135,7 @@ class InvoiceOut(BaseModel):
     igst_pct: Optional[float] = None
     status: InvoiceStatus
     created_at: datetime
+    created_by: Optional[str] = None
     total_paid: float = 0
     outstanding: float = 0
     payments: List[PaymentOut] = []
@@ -226,6 +229,7 @@ class SupplierOut(BaseModel):
     email: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime
+    created_by: Optional[str] = None
     total_purchased: float = 0
     total_paid: float = 0
     outstanding: float = 0
@@ -255,6 +259,7 @@ class PurchasePaymentOut(BaseModel):
     mode: PaymentMode
     remarks: Optional[str] = None
     created_at: datetime
+    created_by: Optional[str] = None
     edited_at: Optional[datetime] = None
 
 
@@ -295,6 +300,36 @@ class PurchaseOut(BaseModel):
     remarks: Optional[str] = None
     status: InvoiceStatus
     created_at: datetime
+    created_by: Optional[str] = None
     total_paid: float = 0
     outstanding: float = 0
     payments: List[PurchasePaymentOut] = []
+
+
+# ---------- User accounts ----------
+class UserRegister(BaseModel):
+    username: str = Field(min_length=2, max_length=50)
+    display_name: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=4)
+
+    @field_validator("username")
+    @classmethod
+    def username_shape(cls, v):
+        cleaned = v.strip().lower()
+        if not cleaned.replace("_", "").replace(".", "").isalnum():
+            raise ValueError("Username can only contain letters, numbers, dots and underscores")
+        return cleaned
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    username: str
+    display_name: str
+    is_active: bool
+    created_at: datetime
