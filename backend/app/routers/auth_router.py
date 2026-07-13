@@ -9,6 +9,28 @@ from ..database import get_db
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+def _create_company_and_adopt_orphaned_data(db: Session, name: str) -> "models.Company":
+    """Creates a new company and claims every row across every table that
+    currently has no company_id at all (data from before multi-tenancy
+    existed). Shared between the bootstrap registration path and the
+    self-healing login path below - both situations are "this data
+    unambiguously belongs to whoever is claiming it now"."""
+    company = models.Company(name=name)
+    db.add(company)
+    db.flush()
+
+    for model in [
+        models.Party, models.Invoice, models.Payment,
+        models.Supplier, models.Purchase, models.PurchasePayment,
+        models.CompanySettings,
+    ]:
+        db.query(model).filter(model.company_id.is_(None)).update(
+            {"company_id": company.id}, synchronize_session=False
+        )
+
+    return company
+
+
 @router.get("/status")
 def auth_status():
     """Unauthenticated - lets the frontend know whether to show a login
@@ -27,10 +49,26 @@ def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
 
     company_id = auth.get_active_company_id(db, user)
     if not company_id:
-        # Shouldn't normally happen (every account should belong to a
-        # company from the moment it's created), but a clear error here
-        # beats a confusing crash somewhere else downstream.
-        raise HTTPException(500, "This account isn't linked to a company - contact whoever set it up")
+        # Self-healing repair, not a hard failure: this happens for an
+        # account created by an EARLIER version of this app, from before
+        # multi-tenancy existed - back then there was no concept of a
+        # "company" at all, so accounts like this have no membership row.
+        # Rather than lock the person out permanently, fix it on the spot:
+        # give them their own company now (reusing an orphaned
+        # CompanySettings name if one exists, since that's very likely
+        # their real, already-configured business), and claim any
+        # pre-existing orphaned data into it, exactly like the bootstrap
+        # registration flow does for the very first account.
+        orphaned_settings = db.query(models.CompanySettings).filter(
+            models.CompanySettings.company_id.is_(None)
+        ).first()
+        company_name = (orphaned_settings.company_name if orphaned_settings and orphaned_settings.company_name
+                         else f"{user.display_name}'s Company")
+
+        company = _create_company_and_adopt_orphaned_data(db, company_name)
+        db.add(models.CompanyMembership(user_id=user.id, company_id=company.id))
+        db.commit()
+        company_id = company.id
 
     company = db.query(models.Company).filter(models.Company.id == company_id).first()
 
@@ -76,12 +114,6 @@ def register(payload: schemas.UserRegister, db: Session = Depends(get_db)):
         db.add(user)
         db.flush()
 
-        company = models.Company(name=payload.company_name)
-        db.add(company)
-        db.flush()
-
-        db.add(models.CompanyMembership(user_id=user.id, company_id=company.id))
-
         # This deployment may already have real data from before multi-tenancy
         # existed (parties, invoices, company settings, etc. all created with
         # no company_id at all, back when there was only ever one business).
@@ -89,14 +121,9 @@ def register(payload: schemas.UserRegister, db: Session = Depends(get_db)):
         # orphaned row unambiguously belongs to it - claim all of it now
         # rather than leaving it invisible/orphaned once company scoping
         # kicks in for every query from this point forward.
-        for model in [
-            models.Party, models.Invoice, models.Payment,
-            models.Supplier, models.Purchase, models.PurchasePayment,
-            models.CompanySettings,
-        ]:
-            db.query(model).filter(model.company_id.is_(None)).update(
-                {"company_id": company.id}, synchronize_session=False
-            )
+        company = _create_company_and_adopt_orphaned_data(db, payload.company_name)
+
+        db.add(models.CompanyMembership(user_id=user.id, company_id=company.id))
 
         db.commit()
         db.refresh(user)
