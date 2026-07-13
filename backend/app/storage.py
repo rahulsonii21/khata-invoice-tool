@@ -33,11 +33,16 @@ def save_invoice_image(file_bytes: bytes, original_filename: str) -> str:
     return f"/files/invoices/{name}"
 
 
-def save_company_logo(file_bytes: bytes, original_filename: str) -> str:
-    """Always uses a fixed filename so re-uploading a logo replaces the old one
-    in place, rather than accumulating orphaned files with every change."""
+def save_company_logo(file_bytes: bytes, original_filename: str, company_id: str) -> str:
+    """Fixed filename PER COMPANY, so re-uploading a logo replaces that
+    company's old one in place (no orphaned files with every change) - but
+    critically, the company_id is part of the filename specifically so two
+    different companies' logos can never collide/overwrite each other. An
+    earlier version of this used a single shared filename for everyone,
+    which would have let one company's logo upload silently overwrite
+    another's."""
     ext = Path(original_filename).suffix or ".png"
-    name = f"company_logo{ext}"
+    name = f"company_logo_{company_id}{ext}"
 
     if supabase_client.is_configured():
         content_type = _guess_content_type(ext)

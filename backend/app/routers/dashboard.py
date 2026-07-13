@@ -1,21 +1,24 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session, selectinload
 from typing import List
 
-from .. import models, schemas
+from .. import models, schemas, auth
 from ..database import get_db
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
 @router.get("/summary")
-def get_summary(db: Session = Depends(get_db)):
+def get_summary(request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
+
     # Eager-load invoices + payments once; every computed property below
     # (total_invoiced, outstanding, is_overdue, etc.) then works off data
     # already in memory instead of firing a fresh query per party/invoice.
     parties = (
         db.query(models.Party)
         .options(selectinload(models.Party.invoices).selectinload(models.Invoice.payments))
+        .filter(models.Party.company_id == company_id)
         .all()
     )
 
@@ -49,6 +52,7 @@ def get_summary(db: Session = Depends(get_db)):
     recent_payments = (
         db.query(models.Payment)
         .options(selectinload(models.Payment.invoice).selectinload(models.Invoice.party))
+        .filter(models.Payment.company_id == company_id)
         .order_by(models.Payment.created_at.desc())
         .limit(10)
         .all()
@@ -56,6 +60,7 @@ def get_summary(db: Session = Depends(get_db)):
     recent_invoices = (
         db.query(models.Invoice)
         .options(selectinload(models.Invoice.party), selectinload(models.Invoice.payments))
+        .filter(models.Invoice.company_id == company_id)
         .order_by(models.Invoice.created_at.desc())
         .limit(10)
         .all()
@@ -66,6 +71,7 @@ def get_summary(db: Session = Depends(get_db)):
     suppliers = (
         db.query(models.Supplier)
         .options(selectinload(models.Supplier.purchases).selectinload(models.Purchase.payments))
+        .filter(models.Supplier.company_id == company_id)
         .all()
     )
     total_purchased = sum(s.total_purchased for s in suppliers)

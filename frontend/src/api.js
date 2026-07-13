@@ -1,20 +1,32 @@
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const TOKEN_KEY = 'khata_token'
 const DISPLAY_NAME_KEY = 'khata_display_name'
+const COMPANY_NAME_KEY = 'khata_company_name'
+const IS_PLATFORM_ADMIN_KEY = 'khata_is_platform_admin'
 
 export function getToken() {
   return sessionStorage.getItem(TOKEN_KEY)
 }
-export function setToken(token, displayName) {
+export function setToken(token, displayName, companyName, isPlatformAdmin) {
   sessionStorage.setItem(TOKEN_KEY, token)
   if (displayName) sessionStorage.setItem(DISPLAY_NAME_KEY, displayName)
+  if (companyName) sessionStorage.setItem(COMPANY_NAME_KEY, companyName)
+  sessionStorage.setItem(IS_PLATFORM_ADMIN_KEY, isPlatformAdmin ? 'true' : 'false')
 }
 export function getDisplayName() {
   return sessionStorage.getItem(DISPLAY_NAME_KEY)
 }
+export function getCompanyName() {
+  return sessionStorage.getItem(COMPANY_NAME_KEY)
+}
+export function getIsPlatformAdmin() {
+  return sessionStorage.getItem(IS_PLATFORM_ADMIN_KEY) === 'true'
+}
 export function clearToken() {
   sessionStorage.removeItem(TOKEN_KEY)
   sessionStorage.removeItem(DISPLAY_NAME_KEY)
+  sessionStorage.removeItem(COMPANY_NAME_KEY)
+  sessionStorage.removeItem(IS_PLATFORM_ADMIN_KEY)
 }
 
 async function request(path, options = {}) {
@@ -170,6 +182,8 @@ export const api = {
 
   // User accounts (multi-user)
   registerUser: (data) => request('/api/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+  createInvite: (forNewCompany) => request('/api/auth/invites', { method: 'POST', body: JSON.stringify({ for_new_company: forNewCompany }) }),
+  listInvites: () => request('/api/auth/invites'),
   listUsers: () => request('/api/auth/users'),
   deactivateUser: (userId) => request(`/api/auth/users/${userId}`, { method: 'DELETE' }),
 }

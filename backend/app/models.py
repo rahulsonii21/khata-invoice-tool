@@ -31,6 +31,7 @@ class Party(Base):
     __tablename__ = "parties"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    company_id = Column(UUID(as_uuid=False), ForeignKey("companies.id"), nullable=True, index=True)
     name = Column(String, nullable=False, index=True)
     phone = Column(String, nullable=True)
     gstin = Column(String, nullable=True)
@@ -61,6 +62,7 @@ class Invoice(Base):
     __tablename__ = "invoices"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    company_id = Column(UUID(as_uuid=False), ForeignKey("companies.id"), nullable=True, index=True)
     party_id = Column(UUID(as_uuid=False), ForeignKey("parties.id"), nullable=False, index=True)
     invoice_number = Column(String, nullable=True)
     invoice_date = Column(Date, nullable=True, index=True)
@@ -113,6 +115,7 @@ class Payment(Base):
     __tablename__ = "payments"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    company_id = Column(UUID(as_uuid=False), ForeignKey("companies.id"), nullable=True, index=True)
     invoice_id = Column(UUID(as_uuid=False), ForeignKey("invoices.id"), nullable=False, index=True)
     amount = Column(Float, nullable=False)
     payment_date = Column(Date, nullable=False, default=date.today)
@@ -139,11 +142,14 @@ class AuditLog(Base):
 
 
 class CompanySettings(Base):
-    """Singleton table (always id='default') holding the user's own business
-    details, used as the letterhead on PDF statements and generated bills."""
+    """One row per company (business details used as the letterhead on PDF
+    statements and generated bills) - was a fixed singleton row (id='default')
+    before multi-tenancy; now keyed by company_id instead, one row per
+    business using this deployment."""
     __tablename__ = "company_settings"
 
-    id = Column(String, primary_key=True, default="default")
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    company_id = Column(UUID(as_uuid=False), ForeignKey("companies.id"), nullable=True, unique=True, index=True)
     company_name = Column(String, nullable=True)
     gstin = Column(String, nullable=True)
     address = Column(Text, nullable=True)
@@ -167,6 +173,7 @@ class Supplier(Base):
     __tablename__ = "suppliers"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    company_id = Column(UUID(as_uuid=False), ForeignKey("companies.id"), nullable=True, index=True)
     name = Column(String, nullable=False, index=True)
     phone = Column(String, nullable=True)
     gstin = Column(String, nullable=True)
@@ -197,6 +204,7 @@ class Purchase(Base):
     __tablename__ = "purchases"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    company_id = Column(UUID(as_uuid=False), ForeignKey("companies.id"), nullable=True, index=True)
     supplier_id = Column(UUID(as_uuid=False), ForeignKey("suppliers.id"), nullable=False, index=True)
     purchase_number = Column(String, nullable=True)  # the supplier's own bill/invoice number
     purchase_date = Column(Date, nullable=True, index=True)
@@ -241,6 +249,7 @@ class PurchasePayment(Base):
     __tablename__ = "purchase_payments"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    company_id = Column(UUID(as_uuid=False), ForeignKey("companies.id"), nullable=True, index=True)
     purchase_id = Column(UUID(as_uuid=False), ForeignKey("purchases.id"), nullable=False, index=True)
     amount = Column(Float, nullable=False)
     payment_date = Column(Date, nullable=False, default=date.today)
@@ -255,13 +264,10 @@ class PurchasePayment(Base):
 
 class AppUser(Base):
     """
-    A real per-person account, replacing the old single-shared-PIN model.
-    Everyone has equal permissions by design (this is a small trusted team,
-    not an org needing role-based access control) - the point of separate
-    accounts is purely accountability: knowing WHO added or changed a given
-    invoice/payment/party, which the audit log (audit.py) already tracks via
-    a changed_by field that used to just say the generic string "user" for
-    everyone. Now it carries the real logged-in person's name.
+    A real per-person account. Can belong to one or more companies (see
+    CompanyMembership) - in practice almost everyone belongs to exactly one,
+    but the data model supports more (e.g. someone helping run two separate
+    businesses).
     """
     __tablename__ = "app_users"
 
@@ -270,4 +276,63 @@ class AppUser(Base):
     display_name = Column(String, nullable=False)
     password_hash = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
+    # Platform-level (not company-level) permission: can this person create
+    # an invite for someone to start a brand NEW, separate company. Only the
+    # very first account ever created on this deployment gets this - signup
+    # is invite-only, so this gates who can onboard entirely new businesses,
+    # as opposed to just adding a teammate to a company that already exists
+    # (any member of a company can do that for their OWN company).
+    is_platform_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Company(Base):
+    """
+    A fully separate business using this deployment - its own parties,
+    invoices, suppliers, purchases, company settings, all isolated from
+    every other company. This is what makes the app multi-tenant: many
+    independent businesses can use the same running instance, each seeing
+    only their own data.
+    """
+    __tablename__ = "companies"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CompanyMembership(Base):
+    """
+    Which people belong to which company. Everyone has equal ('full')
+    access within a company they're a member of - no in-company roles by
+    design (small trusted teams, not orgs needing granular permissions).
+    """
+    __tablename__ = "company_memberships"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    user_id = Column(UUID(as_uuid=False), ForeignKey("app_users.id"), nullable=False, index=True)
+    company_id = Column(UUID(as_uuid=False), ForeignKey("companies.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Invite(Base):
+    """
+    Signup is invite-only, not open self-registration. Two kinds of invite:
+    - company_id is NULL: redeeming this creates a brand new, separate
+      company (the redeemer names it and becomes its first member). Only
+      platform admins can create these right now.
+    - company_id is SET: redeeming this adds the person as a full member of
+      that EXISTING company (e.g. Rahul inviting his father into Vrindavan
+      Organics). Any existing member of a company can create one of these,
+      for their own company.
+    """
+    __tablename__ = "invites"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    token = Column(String, nullable=False, unique=True, index=True)
+    company_id = Column(UUID(as_uuid=False), ForeignKey("companies.id"), nullable=True)
+    created_by_user_id = Column(UUID(as_uuid=False), ForeignKey("app_users.id"), nullable=False)
+    used_by_user_id = Column(UUID(as_uuid=False), ForeignKey("app_users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    used_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)

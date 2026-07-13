@@ -53,6 +53,19 @@ ensure_columns_exist("suppliers", {"created_by": "VARCHAR"})
 ensure_columns_exist("purchases", {"created_by": "VARCHAR"})
 ensure_columns_exist("purchase_payments", {"created_by": "VARCHAR"})
 
+# Multi-tenancy: every data table gets a company_id so one business's data
+# never mixes with another's. Nullable so pre-existing rows (from before
+# multi-tenancy existed) don't break - those get claimed by whichever
+# company bootstraps first (see auth_router.py's register() bootstrap path).
+ensure_columns_exist("parties", {"company_id": "VARCHAR"})
+ensure_columns_exist("invoices", {"company_id": "VARCHAR"})
+ensure_columns_exist("payments", {"company_id": "VARCHAR"})
+ensure_columns_exist("suppliers", {"company_id": "VARCHAR"})
+ensure_columns_exist("purchases", {"company_id": "VARCHAR"})
+ensure_columns_exist("purchase_payments", {"company_id": "VARCHAR"})
+ensure_columns_exist("company_settings", {"company_id": "VARCHAR"})
+ensure_columns_exist("app_users", {"is_platform_admin": "BOOLEAN DEFAULT FALSE"})
+
 # Retroactively add indexes on frequently-filtered columns for databases that
 # already existed before these were added to the model - index=True on a
 # Column only takes effect for tables create_all() builds fresh.

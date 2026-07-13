@@ -11,13 +11,12 @@ router = APIRouter(prefix="/api/parties", tags=["parties"])
 
 
 @router.get("", response_model=List[schemas.PartyOut])
-def list_parties(db: Session = Depends(get_db)):
-    # Eager-load invoices + their payments in a fixed handful of queries
-    # instead of one query per party per invoice (was O(n) queries, now O(1) -
-    # measured 121 queries -> 3 for 20 parties/100 invoices/200 payments).
+def list_parties(request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
     parties = (
         db.query(models.Party)
         .options(selectinload(models.Party.invoices).selectinload(models.Invoice.payments))
+        .filter(models.Party.company_id == company_id)
         .order_by(models.Party.name)
         .all()
     )
@@ -25,16 +24,19 @@ def list_parties(db: Session = Depends(get_db)):
 
 
 @router.get("/match/search")
-def match_party(name: str = Query(..., min_length=1), db: Session = Depends(get_db)):
+def match_party(request: Request, name: str = Query(..., min_length=1), db: Session = Depends(get_db)):
     """
     Fuzzy-matches a party name (typically from OCR extraction) against
     existing parties, so the review screen can suggest "did you mean X?"
     instead of creating duplicate parties for the same party written
     slightly differently (e.g. OCR variance, Hindi vs Hinglish spelling).
     """
-    # Only pull id+name (not every column) - this endpoint doesn't need
-    # anything else and there's no reason to transfer/hydrate full rows.
-    rows = db.query(models.Party.id, models.Party.name).all()
+    company_id = auth.get_current_company_id(request)
+    rows = (
+        db.query(models.Party.id, models.Party.name)
+        .filter(models.Party.company_id == company_id)
+        .all()
+    )
     scored = [
         {
             "party_id": row.id,
@@ -44,16 +46,16 @@ def match_party(name: str = Query(..., min_length=1), db: Session = Depends(get_
         for row in rows
     ]
     scored.sort(key=lambda x: x["score"], reverse=True)
-    # Only return plausible matches; below ~0.55 similarity it's noise
     return [s for s in scored if s["score"] >= 0.55][:5]
 
 
 @router.get("/{party_id}", response_model=schemas.PartyOut)
-def get_party(party_id: str, db: Session = Depends(get_db)):
+def get_party(party_id: str, request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
     party = (
         db.query(models.Party)
         .options(selectinload(models.Party.invoices).selectinload(models.Invoice.payments))
-        .filter(models.Party.id == party_id)
+        .filter(models.Party.id == party_id, models.Party.company_id == company_id)
         .first()
     )
     if not party:
@@ -65,6 +67,7 @@ def get_party(party_id: str, db: Session = Depends(get_db)):
 def create_party(payload: schemas.PartyCreate, request: Request, db: Session = Depends(get_db)):
     data = payload.model_dump()
     data["created_by"] = auth.get_current_username(request)
+    data["company_id"] = auth.get_current_company_id(request)
     party = models.Party(**data)
     db.add(party)
     db.commit()
@@ -74,7 +77,8 @@ def create_party(payload: schemas.PartyCreate, request: Request, db: Session = D
 
 @router.put("/{party_id}", response_model=schemas.PartyOut)
 def update_party(party_id: str, payload: schemas.PartyUpdate, request: Request, db: Session = Depends(get_db)):
-    party = db.query(models.Party).filter(models.Party.id == party_id).first()
+    company_id = auth.get_current_company_id(request)
+    party = db.query(models.Party).filter(models.Party.id == party_id, models.Party.company_id == company_id).first()
     if not party:
         raise HTTPException(404, "Party not found")
 
@@ -92,8 +96,9 @@ def update_party(party_id: str, payload: schemas.PartyUpdate, request: Request, 
 
 
 @router.delete("/{party_id}")
-def delete_party(party_id: str, db: Session = Depends(get_db)):
-    party = db.query(models.Party).filter(models.Party.id == party_id).first()
+def delete_party(party_id: str, request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
+    party = db.query(models.Party).filter(models.Party.id == party_id, models.Party.company_id == company_id).first()
     if not party:
         raise HTTPException(404, "Party not found")
     db.delete(party)

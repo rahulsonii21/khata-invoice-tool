@@ -1,11 +1,11 @@
 import json
 from datetime import datetime
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .. import models, storage, bill_generator
+from .. import models, storage, bill_generator, auth
 from ..database import get_db
 
 router = APIRouter(prefix="/api/bills", tags=["bills"])
@@ -46,8 +46,8 @@ class RegenerateBillRequest(BaseModel):
     driver_contact: Optional[str] = None
 
 
-def _build_company_dict(db: Session) -> dict:
-    company_row = db.query(models.CompanySettings).filter(models.CompanySettings.id == "default").first()
+def _build_company_dict(db: Session, company_id: str) -> dict:
+    company_row = db.query(models.CompanySettings).filter(models.CompanySettings.company_id == company_id).first()
     company = {}
     if company_row:
         company = {
@@ -95,8 +95,9 @@ def _render_bill(company, party, bill_number, bill_date, items, cgst_pct, sgst_p
 
 
 @router.post("/generate")
-def generate_bill(payload: GenerateBillRequest, db: Session = Depends(get_db)):
-    party = db.query(models.Party).filter(models.Party.id == payload.party_id).first()
+def generate_bill(payload: GenerateBillRequest, request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
+    party = db.query(models.Party).filter(models.Party.id == payload.party_id, models.Party.company_id == company_id).first()
     if not party:
         raise HTTPException(404, "Party not found")
 
@@ -108,7 +109,7 @@ def generate_bill(payload: GenerateBillRequest, db: Session = Depends(get_db)):
     if grand_total <= 0:
         raise HTTPException(422, "Bill total must be greater than zero")
 
-    company = _build_company_dict(db)
+    company = _build_company_dict(db, company_id)
 
     try:
         image_bytes = _render_bill(
@@ -127,13 +128,14 @@ def generate_bill(payload: GenerateBillRequest, db: Session = Depends(get_db)):
     invoice_date = datetime.strptime(payload.bill_date, "%Y-%m-%d").date() if payload.bill_date else None
     due_date = datetime.strptime(payload.due_date, "%Y-%m-%d").date() if payload.due_date else None
     if not due_date and invoice_date:
-        company_row = db.query(models.CompanySettings).filter(models.CompanySettings.id == "default").first()
+        company_row = db.query(models.CompanySettings).filter(models.CompanySettings.company_id == company_id).first()
         if company_row and company_row.default_credit_days:
             from datetime import timedelta
             due_date = invoice_date + timedelta(days=int(company_row.default_credit_days))
 
     invoice = models.Invoice(
         party_id=party.id,
+        company_id=company_id,
         invoice_number=payload.bill_number,
         invoice_date=invoice_date,
         due_date=due_date,
@@ -162,20 +164,21 @@ def generate_bill(payload: GenerateBillRequest, db: Session = Depends(get_db)):
 
 
 @router.put("/{invoice_id}/regenerate")
-def regenerate_bill(invoice_id: str, payload: RegenerateBillRequest, db: Session = Depends(get_db)):
+def regenerate_bill(invoice_id: str, payload: RegenerateBillRequest, request: Request, db: Session = Depends(get_db)):
     """Re-renders an existing generated bill's image with edited items/details,
     and updates the same invoice record (rather than creating a new one)."""
-    invoice = db.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
+    company_id = auth.get_current_company_id(request)
+    invoice = db.query(models.Invoice).filter(models.Invoice.id == invoice_id, models.Invoice.company_id == company_id).first()
     if not invoice:
         raise HTTPException(404, "Invoice not found")
     if not invoice.is_generated:
         raise HTTPException(400, "This invoice wasn't created by the bill generator, so it can't be regenerated")
 
-    party = db.query(models.Party).filter(models.Party.id == invoice.party_id).first()
+    party = db.query(models.Party).filter(models.Party.id == invoice.party_id, models.Party.company_id == company_id).first()
     if not party:
         raise HTTPException(404, "Party not found")
 
-    company = _build_company_dict(db)
+    company = _build_company_dict(db, company_id)
 
     try:
         image_bytes = _render_bill(

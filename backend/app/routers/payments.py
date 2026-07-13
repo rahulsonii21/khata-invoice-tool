@@ -12,8 +12,11 @@ standalone_router = APIRouter(prefix="/api/payments", tags=["payments"])
 
 
 @router.get("", response_model=List[schemas.PaymentOut])
-def list_payments(invoice_id: str, db: Session = Depends(get_db)):
-    invoice = db.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
+def list_payments(invoice_id: str, request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
+    invoice = db.query(models.Invoice).filter(
+        models.Invoice.id == invoice_id, models.Invoice.company_id == company_id
+    ).first()
     if not invoice:
         raise HTTPException(404, "Invoice not found")
     return invoice.payments
@@ -21,12 +24,16 @@ def list_payments(invoice_id: str, db: Session = Depends(get_db)):
 
 @router.post("", response_model=schemas.PaymentOut)
 def add_payment(invoice_id: str, payload: schemas.PaymentCreate, request: Request, db: Session = Depends(get_db)):
-    invoice = db.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
+    company_id = auth.get_current_company_id(request)
+    invoice = db.query(models.Invoice).filter(
+        models.Invoice.id == invoice_id, models.Invoice.company_id == company_id
+    ).first()
     if not invoice:
         raise HTTPException(404, "Invoice not found")
 
     data = payload.model_dump()
     data["created_by"] = auth.get_current_username(request)
+    data["company_id"] = company_id
     payment = models.Payment(invoice_id=invoice_id, **data)
     db.add(payment)
     db.flush()  # so invoice.payments reflects the new row
@@ -39,7 +46,10 @@ def add_payment(invoice_id: str, payload: schemas.PaymentCreate, request: Reques
 
 @standalone_router.put("/{payment_id}", response_model=schemas.PaymentOut)
 def update_payment(payment_id: str, payload: schemas.PaymentUpdate, request: Request, db: Session = Depends(get_db)):
-    payment = db.query(models.Payment).filter(models.Payment.id == payment_id).first()
+    company_id = auth.get_current_company_id(request)
+    payment = db.query(models.Payment).filter(
+        models.Payment.id == payment_id, models.Payment.company_id == company_id
+    ).first()
     if not payment:
         raise HTTPException(404, "Payment not found")
 
@@ -61,8 +71,11 @@ def update_payment(payment_id: str, payload: schemas.PaymentUpdate, request: Req
 
 
 @standalone_router.delete("/{payment_id}")
-def delete_payment(payment_id: str, db: Session = Depends(get_db)):
-    payment = db.query(models.Payment).filter(models.Payment.id == payment_id).first()
+def delete_payment(payment_id: str, request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
+    payment = db.query(models.Payment).filter(
+        models.Payment.id == payment_id, models.Payment.company_id == company_id
+    ).first()
     if not payment:
         raise HTTPException(404, "Payment not found")
     invoice = payment.invoice

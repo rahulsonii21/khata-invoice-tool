@@ -11,12 +11,16 @@ router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 
 @router.get("", response_model=List[schemas.InvoiceOut])
 def list_invoices(
+    request: Request,
     party_id: Optional[str] = Query(None),
     status: Optional[models.InvoiceStatus] = Query(None),
     month: Optional[str] = Query(None, description="YYYY-MM, filters by invoice_date"),
     db: Session = Depends(get_db),
 ):
-    q = db.query(models.Invoice).options(selectinload(models.Invoice.payments))
+    company_id = auth.get_current_company_id(request)
+    q = db.query(models.Invoice).options(selectinload(models.Invoice.payments)).filter(
+        models.Invoice.company_id == company_id
+    )
     if party_id:
         q = q.filter(models.Invoice.party_id == party_id)
     if status:
@@ -35,11 +39,12 @@ def list_invoices(
 
 
 @router.get("/{invoice_id}", response_model=schemas.InvoiceOut)
-def get_invoice(invoice_id: str, db: Session = Depends(get_db)):
+def get_invoice(invoice_id: str, request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
     invoice = (
         db.query(models.Invoice)
         .options(selectinload(models.Invoice.payments))
-        .filter(models.Invoice.id == invoice_id)
+        .filter(models.Invoice.id == invoice_id, models.Invoice.company_id == company_id)
         .first()
     )
     if not invoice:
@@ -49,21 +54,27 @@ def get_invoice(invoice_id: str, db: Session = Depends(get_db)):
 
 @router.post("", response_model=schemas.InvoiceOut)
 def create_invoice(payload: schemas.InvoiceCreate, request: Request, db: Session = Depends(get_db)):
-    party = db.query(models.Party).filter(models.Party.id == payload.party_id).first()
+    company_id = auth.get_current_company_id(request)
+    party = db.query(models.Party).filter(
+        models.Party.id == payload.party_id, models.Party.company_id == company_id
+    ).first()
     if not party:
         raise HTTPException(404, "Party not found - create the party first")
 
     data = payload.model_dump()
     data["created_by"] = auth.get_current_username(request)
+    data["company_id"] = company_id
 
     # Auto-fill due_date from the company's default credit terms, if the
     # caller didn't specify one explicitly and we have both an invoice date
     # and a configured default.
     if not data.get("due_date") and data.get("invoice_date"):
-        company = db.query(models.CompanySettings).filter(models.CompanySettings.id == "default").first()
-        if company and company.default_credit_days:
+        company_settings = db.query(models.CompanySettings).filter(
+            models.CompanySettings.company_id == company_id
+        ).first()
+        if company_settings and company_settings.default_credit_days:
             from datetime import timedelta
-            data["due_date"] = data["invoice_date"] + timedelta(days=int(company.default_credit_days))
+            data["due_date"] = data["invoice_date"] + timedelta(days=int(company_settings.default_credit_days))
 
     invoice = models.Invoice(**data)
     invoice.refresh_status()
@@ -75,7 +86,10 @@ def create_invoice(payload: schemas.InvoiceCreate, request: Request, db: Session
 
 @router.put("/{invoice_id}", response_model=schemas.InvoiceOut)
 def update_invoice(invoice_id: str, payload: schemas.InvoiceUpdate, request: Request, db: Session = Depends(get_db)):
-    invoice = db.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
+    company_id = auth.get_current_company_id(request)
+    invoice = db.query(models.Invoice).filter(
+        models.Invoice.id == invoice_id, models.Invoice.company_id == company_id
+    ).first()
     if not invoice:
         raise HTTPException(404, "Invoice not found")
 
@@ -94,8 +108,11 @@ def update_invoice(invoice_id: str, payload: schemas.InvoiceUpdate, request: Req
 
 
 @router.delete("/{invoice_id}")
-def delete_invoice(invoice_id: str, db: Session = Depends(get_db)):
-    invoice = db.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
+def delete_invoice(invoice_id: str, request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
+    invoice = db.query(models.Invoice).filter(
+        models.Invoice.id == invoice_id, models.Invoice.company_id == company_id
+    ).first()
     if not invoice:
         raise HTTPException(404, "Invoice not found")
     db.delete(invoice)

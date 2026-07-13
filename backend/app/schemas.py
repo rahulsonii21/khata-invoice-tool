@@ -311,6 +311,8 @@ class UserRegister(BaseModel):
     username: str = Field(min_length=2, max_length=50)
     display_name: str = Field(min_length=1, max_length=100)
     password: str = Field(min_length=4)
+    invite_token: Optional[str] = None  # not needed only for the very first bootstrap account
+    company_name: Optional[str] = None  # only used when redeeming a "start a new company" invite
 
     @field_validator("username")
     @classmethod
@@ -332,4 +334,24 @@ class UserOut(BaseModel):
     username: str
     display_name: str
     is_active: bool
+    created_at: datetime
+
+
+class CompanyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    name: str
+    created_at: datetime
+
+
+class InviteCreate(BaseModel):
+    for_new_company: bool = False  # True = invite someone to start their own separate business (platform-admin only)
+
+
+class InviteOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    token: str
+    company_id: Optional[str] = None
+    used_at: Optional[datetime] = None
     created_at: datetime

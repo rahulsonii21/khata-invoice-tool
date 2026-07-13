@@ -1,5 +1,5 @@
 """
-Portable, ORM-based export/import of every row in every table, as JSON.
+Portable, ORM-based export/import of one company's data, as JSON.
 
 Why this exists: the app's backup previously only included a database dump
 when running on SQLite (local dev), with a comment claiming Supabase's
@@ -12,6 +12,13 @@ this file existed.
 This uses SQLAlchemy directly rather than pg_dump/psql, so it works
 identically regardless of whether the database is SQLite or Postgres, with
 no external binary dependency to install or version-match.
+
+IMPORTANT (multi-tenant): every function here is scoped to a single
+company_id. An earlier version of this operated globally across the whole
+database - fine when there was only ever one business using the app, but
+after adding multi-tenancy that would have meant one company's "restore"
+wiping and overwriting every OTHER company's data too. Every table this
+touches has a company_id column specifically so this stays scoped correctly.
 """
 from datetime import datetime, date
 from sqlalchemy.orm import Session
@@ -49,12 +56,13 @@ def _row_to_dict(row) -> dict:
     return {col: _serialize_value(getattr(row, col)) for col in columns}
 
 
-def export_all_data(db: Session) -> dict:
-    """Returns a JSON-serializable dict: {table_name: [row_dict, ...]}."""
+def export_all_data(db: Session, company_id: str) -> dict:
+    """Returns a JSON-serializable dict: {table_name: [row_dict, ...]} -
+    only for the given company, never touching other companies' rows."""
     data = {}
     for table_name in _EXPORT_ORDER:
         model = _MODEL_BY_TABLE[table_name]
-        rows = db.query(model).all()
+        rows = db.query(model).filter(model.company_id == company_id).all()
         data[table_name] = [_row_to_dict(r) for r in rows]
     return data
 
@@ -76,29 +84,39 @@ def _deserialize_row(table_name: str, row_dict: dict) -> dict:
     return result
 
 
-def restore_all_data(db: Session, data: dict) -> dict:
+def restore_all_data(db: Session, data: dict, company_id: str) -> dict:
     """
-    Replaces all current data with the backup's data. This is destructive by
-    design - restoring a backup means going back to that point in time, not
-    merging it with whatever exists now. The caller (API endpoint) is
-    responsible for requiring explicit confirmation before calling this.
+    Replaces THIS COMPANY's current data with the backup's data. This is
+    destructive by design for that one company - restoring a backup means
+    going back to that point in time, not merging it with whatever exists
+    now. Every other company's data is completely untouched, since every
+    delete/insert here is filtered to company_id.
+
+    The caller (API endpoint) is responsible for requiring explicit
+    confirmation before calling this, and for verifying the backup being
+    restored actually belongs to this same company (see routers/backup.py).
 
     Returns a summary dict of how many rows were restored per table.
     """
     summary = {}
 
-    # Delete in reverse order (children before parents) to respect FK constraints
+    # Delete in reverse order (children before parents) to respect FK
+    # constraints - and ONLY this company's rows in every table.
     for table_name in reversed(_EXPORT_ORDER):
         model = _MODEL_BY_TABLE[table_name]
-        db.query(model).delete()
+        db.query(model).filter(model.company_id == company_id).delete(synchronize_session=False)
     db.flush()
 
-    # Insert in forward order (parents before children)
+    # Insert in forward order (parents before children), forcing company_id
+    # on every row regardless of what's in the backup file itself - belt and
+    # suspenders against a corrupted/tampered backup claiming a different
+    # company_id than the one actually doing the restore.
     for table_name in _EXPORT_ORDER:
         model = _MODEL_BY_TABLE[table_name]
         rows = data.get(table_name, [])
         for row_dict in rows:
             clean = _deserialize_row(table_name, row_dict)
+            clean["company_id"] = company_id
             db.add(model(**clean))
         summary[table_name] = len(rows)
         db.flush()

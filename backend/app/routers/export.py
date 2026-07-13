@@ -1,11 +1,11 @@
 from datetime import datetime
 import calendar
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from .. import models, storage
+from .. import models, storage, auth
 from ..database import get_db
 from .. import export as export_lib
 
@@ -48,13 +48,13 @@ def _month_label(month: str) -> str:
     return datetime(year, mon, 1).strftime("%B %Y")
 
 
-def _get_month_invoices(db: Session, month: str, party_id: Optional[str] = None):
+def _get_month_invoices(db: Session, company_id: str, month: str, party_id: Optional[str] = None):
     """Returns list of (party, invoices) tuples for the given month, optionally
     scoped to a single party. Invoices without a set invoice_date are excluded
     since they can't be placed in a specific month."""
     start, end = _month_bounds(month)
 
-    party_query = db.query(models.Party)
+    party_query = db.query(models.Party).filter(models.Party.company_id == company_id)
     if party_id:
         party_query = party_query.filter(models.Party.id == party_id)
     parties = party_query.order_by(models.Party.name).all()
@@ -65,6 +65,7 @@ def _get_month_invoices(db: Session, month: str, party_id: Optional[str] = None)
             db.query(models.Invoice)
             .filter(
                 models.Invoice.party_id == party.id,
+                models.Invoice.company_id == company_id,
                 models.Invoice.invoice_date >= start,
                 models.Invoice.invoice_date <= end,
             )
@@ -77,13 +78,15 @@ def _get_month_invoices(db: Session, month: str, party_id: Optional[str] = None)
 
 @router.get("/monthly/summary-pdf")
 def export_monthly_summary(
+    request: Request,
     month: str = Query(..., description="YYYY-MM"),
     party_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    party_invoice_pairs = _get_month_invoices(db, month, party_id)
+    company_id = auth.get_current_company_id(request)
+    party_invoice_pairs = _get_month_invoices(db, company_id, month, party_id)
 
-    company_settings = db.query(models.CompanySettings).filter(models.CompanySettings.id == "default").first()
+    company_settings = db.query(models.CompanySettings).filter(models.CompanySettings.company_id == company_id).first()
     logo_bytes = None
     if company_settings and company_settings.logo_url:
         logo_bytes = storage.get_cached_logo_bytes(company_settings.logo_url)
@@ -101,11 +104,13 @@ def export_monthly_summary(
 
 @router.get("/monthly/detailed-excel")
 def export_monthly_detailed_excel(
+    request: Request,
     month: str = Query(..., description="YYYY-MM"),
     party_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    party_invoice_pairs = _get_month_invoices(db, month, party_id)
+    company_id = auth.get_current_company_id(request)
+    party_invoice_pairs = _get_month_invoices(db, company_id, month, party_id)
     xlsx_bytes = export_lib.generate_excel_export(party_invoice_pairs)
     filename = f"sales_detail_{month}.xlsx"
     return Response(
@@ -117,11 +122,13 @@ def export_monthly_detailed_excel(
 
 @router.get("/monthly/bills-pdf")
 def export_monthly_bills_pdf(
+    request: Request,
     month: str = Query(..., description="YYYY-MM"),
     party_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    party_invoice_pairs = _get_month_invoices(db, month, party_id)
+    company_id = auth.get_current_company_id(request)
+    party_invoice_pairs = _get_month_invoices(db, company_id, month, party_id)
 
     # Flatten to a single chronological list across all included parties,
     # since bills from different parties on the same day should still
@@ -147,19 +154,20 @@ def export_monthly_bills_pdf(
 
 
 @router.get("/party/{party_id}/pdf")
-def export_party_pdf(party_id: str, db: Session = Depends(get_db)):
-    party = db.query(models.Party).filter(models.Party.id == party_id).first()
+def export_party_pdf(party_id: str, request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
+    party = db.query(models.Party).filter(models.Party.id == party_id, models.Party.company_id == company_id).first()
     if not party:
         raise HTTPException(404, "Party not found")
 
     invoices = (
         db.query(models.Invoice)
-        .filter(models.Invoice.party_id == party_id)
+        .filter(models.Invoice.party_id == party_id, models.Invoice.company_id == company_id)
         .order_by(models.Invoice.invoice_date)
         .all()
     )
 
-    company_settings = db.query(models.CompanySettings).filter(models.CompanySettings.id == "default").first()
+    company_settings = db.query(models.CompanySettings).filter(models.CompanySettings.company_id == company_id).first()
     logo_bytes = None
     if company_settings and company_settings.logo_url:
         logo_bytes = storage.get_cached_logo_bytes(company_settings.logo_url)
@@ -175,14 +183,15 @@ def export_party_pdf(party_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/party/{party_id}/excel")
-def export_party_excel(party_id: str, db: Session = Depends(get_db)):
-    party = db.query(models.Party).filter(models.Party.id == party_id).first()
+def export_party_excel(party_id: str, request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
+    party = db.query(models.Party).filter(models.Party.id == party_id, models.Party.company_id == company_id).first()
     if not party:
         raise HTTPException(404, "Party not found")
 
     invoices = (
         db.query(models.Invoice)
-        .filter(models.Invoice.party_id == party_id)
+        .filter(models.Invoice.party_id == party_id, models.Invoice.company_id == company_id)
         .order_by(models.Invoice.invoice_date)
         .all()
     )
@@ -198,14 +207,15 @@ def export_party_excel(party_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/all/excel")
-def export_all_excel(db: Session = Depends(get_db)):
-    parties = db.query(models.Party).order_by(models.Party.name).all()
+def export_all_excel(request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
+    parties = db.query(models.Party).filter(models.Party.company_id == company_id).order_by(models.Party.name).all()
 
     parties_with_invoices = [
         (
             party,
             db.query(models.Invoice)
-            .filter(models.Invoice.party_id == party.id)
+            .filter(models.Invoice.party_id == party.id, models.Invoice.company_id == company_id)
             .order_by(models.Invoice.invoice_date)
             .all(),
         )
@@ -225,10 +235,10 @@ def export_all_excel(db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 # Purchase ledger (payables) monthly reports - mirror the sales-side ones above
 # ---------------------------------------------------------------------------
-def _get_month_purchases(db: Session, month: str, supplier_id: Optional[str] = None):
+def _get_month_purchases(db: Session, company_id: str, month: str, supplier_id: Optional[str] = None):
     start, end = _month_bounds(month)
 
-    supplier_query = db.query(models.Supplier)
+    supplier_query = db.query(models.Supplier).filter(models.Supplier.company_id == company_id)
     if supplier_id:
         supplier_query = supplier_query.filter(models.Supplier.id == supplier_id)
     suppliers = supplier_query.order_by(models.Supplier.name).all()
@@ -239,6 +249,7 @@ def _get_month_purchases(db: Session, month: str, supplier_id: Optional[str] = N
             db.query(models.Purchase)
             .filter(
                 models.Purchase.supplier_id == supplier.id,
+                models.Purchase.company_id == company_id,
                 models.Purchase.purchase_date >= start,
                 models.Purchase.purchase_date <= end,
             )
@@ -262,13 +273,15 @@ class _InvoiceLike:
 
 @router.get("/monthly/purchase-summary-pdf")
 def export_monthly_purchase_summary(
+    request: Request,
     month: str = Query(..., description="YYYY-MM"),
     supplier_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    supplier_purchase_pairs = _get_month_purchases(db, month, supplier_id)
+    company_id = auth.get_current_company_id(request)
+    supplier_purchase_pairs = _get_month_purchases(db, company_id, month, supplier_id)
 
-    company_settings = db.query(models.CompanySettings).filter(models.CompanySettings.id == "default").first()
+    company_settings = db.query(models.CompanySettings).filter(models.CompanySettings.company_id == company_id).first()
     logo_bytes = None
     if company_settings and company_settings.logo_url:
         logo_bytes = storage.get_cached_logo_bytes(company_settings.logo_url)
@@ -286,11 +299,13 @@ def export_monthly_purchase_summary(
 
 @router.get("/monthly/purchase-detailed-excel")
 def export_monthly_purchase_detailed_excel(
+    request: Request,
     month: str = Query(..., description="YYYY-MM"),
     supplier_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    supplier_purchase_pairs = _get_month_purchases(db, month, supplier_id)
+    company_id = auth.get_current_company_id(request)
+    supplier_purchase_pairs = _get_month_purchases(db, company_id, month, supplier_id)
     xlsx_bytes = export_lib.generate_purchase_excel_export(supplier_purchase_pairs)
     filename = f"purchase_detail_{month}.xlsx"
     return Response(
@@ -302,11 +317,13 @@ def export_monthly_purchase_detailed_excel(
 
 @router.get("/monthly/purchase-bills-pdf")
 def export_monthly_purchase_bills_pdf(
+    request: Request,
     month: str = Query(..., description="YYYY-MM"),
     supplier_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    supplier_purchase_pairs = _get_month_purchases(db, month, supplier_id)
+    company_id = auth.get_current_company_id(request)
+    supplier_purchase_pairs = _get_month_purchases(db, company_id, month, supplier_id)
 
     all_purchases = []
     for supplier, purchases in supplier_purchase_pairs:

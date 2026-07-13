@@ -11,12 +11,16 @@ router = APIRouter(prefix="/api/purchases", tags=["purchases"])
 
 @router.get("", response_model=List[schemas.PurchaseOut])
 def list_purchases(
+    request: Request,
     supplier_id: Optional[str] = Query(None),
     status: Optional[models.InvoiceStatus] = Query(None),
     month: Optional[str] = Query(None, description="YYYY-MM, filters by purchase_date"),
     db: Session = Depends(get_db),
 ):
-    q = db.query(models.Purchase).options(selectinload(models.Purchase.payments))
+    company_id = auth.get_current_company_id(request)
+    q = db.query(models.Purchase).options(selectinload(models.Purchase.payments)).filter(
+        models.Purchase.company_id == company_id
+    )
     if supplier_id:
         q = q.filter(models.Purchase.supplier_id == supplier_id)
     if status:
@@ -35,11 +39,12 @@ def list_purchases(
 
 
 @router.get("/{purchase_id}", response_model=schemas.PurchaseOut)
-def get_purchase(purchase_id: str, db: Session = Depends(get_db)):
+def get_purchase(purchase_id: str, request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
     purchase = (
         db.query(models.Purchase)
         .options(selectinload(models.Purchase.payments))
-        .filter(models.Purchase.id == purchase_id)
+        .filter(models.Purchase.id == purchase_id, models.Purchase.company_id == company_id)
         .first()
     )
     if not purchase:
@@ -49,12 +54,16 @@ def get_purchase(purchase_id: str, db: Session = Depends(get_db)):
 
 @router.post("", response_model=schemas.PurchaseOut)
 def create_purchase(payload: schemas.PurchaseCreate, request: Request, db: Session = Depends(get_db)):
-    supplier = db.query(models.Supplier).filter(models.Supplier.id == payload.supplier_id).first()
+    company_id = auth.get_current_company_id(request)
+    supplier = db.query(models.Supplier).filter(
+        models.Supplier.id == payload.supplier_id, models.Supplier.company_id == company_id
+    ).first()
     if not supplier:
         raise HTTPException(404, "Supplier not found - create the supplier first")
 
     data = payload.model_dump()
     data["created_by"] = auth.get_current_username(request)
+    data["company_id"] = company_id
     purchase = models.Purchase(**data)
     purchase.refresh_status()
     db.add(purchase)
@@ -65,7 +74,10 @@ def create_purchase(payload: schemas.PurchaseCreate, request: Request, db: Sessi
 
 @router.put("/{purchase_id}", response_model=schemas.PurchaseOut)
 def update_purchase(purchase_id: str, payload: schemas.PurchaseUpdate, request: Request, db: Session = Depends(get_db)):
-    purchase = db.query(models.Purchase).filter(models.Purchase.id == purchase_id).first()
+    company_id = auth.get_current_company_id(request)
+    purchase = db.query(models.Purchase).filter(
+        models.Purchase.id == purchase_id, models.Purchase.company_id == company_id
+    ).first()
     if not purchase:
         raise HTTPException(404, "Purchase not found")
 
@@ -84,8 +96,11 @@ def update_purchase(purchase_id: str, payload: schemas.PurchaseUpdate, request: 
 
 
 @router.delete("/{purchase_id}")
-def delete_purchase(purchase_id: str, db: Session = Depends(get_db)):
-    purchase = db.query(models.Purchase).filter(models.Purchase.id == purchase_id).first()
+def delete_purchase(purchase_id: str, request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
+    purchase = db.query(models.Purchase).filter(
+        models.Purchase.id == purchase_id, models.Purchase.company_id == company_id
+    ).first()
     if not purchase:
         raise HTTPException(404, "Purchase not found")
     db.delete(purchase)

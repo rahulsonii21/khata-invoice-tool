@@ -12,8 +12,11 @@ standalone_router = APIRouter(prefix="/api/purchase-payments", tags=["purchase_p
 
 
 @router.get("", response_model=List[schemas.PurchasePaymentOut])
-def list_purchase_payments(purchase_id: str, db: Session = Depends(get_db)):
-    purchase = db.query(models.Purchase).filter(models.Purchase.id == purchase_id).first()
+def list_purchase_payments(purchase_id: str, request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
+    purchase = db.query(models.Purchase).filter(
+        models.Purchase.id == purchase_id, models.Purchase.company_id == company_id
+    ).first()
     if not purchase:
         raise HTTPException(404, "Purchase not found")
     return purchase.payments
@@ -21,12 +24,16 @@ def list_purchase_payments(purchase_id: str, db: Session = Depends(get_db)):
 
 @router.post("", response_model=schemas.PurchasePaymentOut)
 def add_purchase_payment(purchase_id: str, payload: schemas.PurchasePaymentCreate, request: Request, db: Session = Depends(get_db)):
-    purchase = db.query(models.Purchase).filter(models.Purchase.id == purchase_id).first()
+    company_id = auth.get_current_company_id(request)
+    purchase = db.query(models.Purchase).filter(
+        models.Purchase.id == purchase_id, models.Purchase.company_id == company_id
+    ).first()
     if not purchase:
         raise HTTPException(404, "Purchase not found")
 
     data = payload.model_dump()
     data["created_by"] = auth.get_current_username(request)
+    data["company_id"] = company_id
     payment = models.PurchasePayment(purchase_id=purchase_id, **data)
     db.add(payment)
     db.flush()
@@ -39,7 +46,10 @@ def add_purchase_payment(purchase_id: str, payload: schemas.PurchasePaymentCreat
 
 @standalone_router.put("/{payment_id}", response_model=schemas.PurchasePaymentOut)
 def update_purchase_payment(payment_id: str, payload: schemas.PurchasePaymentUpdate, request: Request, db: Session = Depends(get_db)):
-    payment = db.query(models.PurchasePayment).filter(models.PurchasePayment.id == payment_id).first()
+    company_id = auth.get_current_company_id(request)
+    payment = db.query(models.PurchasePayment).filter(
+        models.PurchasePayment.id == payment_id, models.PurchasePayment.company_id == company_id
+    ).first()
     if not payment:
         raise HTTPException(404, "Payment not found")
 
@@ -61,8 +71,11 @@ def update_purchase_payment(payment_id: str, payload: schemas.PurchasePaymentUpd
 
 
 @standalone_router.delete("/{payment_id}")
-def delete_purchase_payment(payment_id: str, db: Session = Depends(get_db)):
-    payment = db.query(models.PurchasePayment).filter(models.PurchasePayment.id == payment_id).first()
+def delete_purchase_payment(payment_id: str, request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
+    payment = db.query(models.PurchasePayment).filter(
+        models.PurchasePayment.id == payment_id, models.PurchasePayment.company_id == company_id
+    ).first()
     if not payment:
         raise HTTPException(404, "Payment not found")
     purchase = payment.purchase

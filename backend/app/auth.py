@@ -1,15 +1,15 @@
 """
-Per-person account authentication, replacing the old single-shared-PIN
-system. Everyone has equal permissions - the point isn't access control,
-it's accountability: every invoice/payment/party change gets tagged with
-the real person who made it, instead of a generic "user" string.
+Multi-tenant authentication: real per-person accounts, each belonging to one
+or more Companies (fully separate businesses sharing this one deployment).
+Signup is invite-only - see routers/auth_router.py for how invites work.
 
-Design principle: fails SAFE, same as before. If there are zero user
-accounts in the database, authentication is completely bypassed - this
-means a fresh install or someone who never sets up accounts never gets
-locked out. It only activates once at least one account actually exists.
+Design principle: fails SAFE, same as always in this app. If there are zero
+user accounts anywhere, authentication is completely bypassed - a fresh
+install or an accidentally-empty database never locks anyone out. It only
+activates once at least one account exists ANYWHERE (across all companies).
 """
 import os
+import secrets
 import bcrypt
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
@@ -20,7 +20,7 @@ _serializer = URLSafeTimedSerializer(APP_SECRET_KEY)
 
 # Cached in memory rather than querying the DB on every single request (the
 # middleware runs on every API call). Refreshed at startup and whenever a
-# user is created/deleted via refresh_auth_required_cache().
+# user is created/deactivated via refresh_auth_required_cache().
 _auth_required_cache = None
 
 
@@ -34,10 +34,7 @@ def refresh_auth_required_cache(db) -> bool:
 
 def is_auth_required() -> bool:
     if _auth_required_cache is None:
-        # Shouldn't normally happen (main.py primes this at startup), but
-        # fail safe rather than crash if it's ever missed: treat as "not
-        # required" so a bug here can't lock everyone out.
-        return False
+        return False  # fail safe rather than crash if this was ever missed at startup
     return _auth_required_cache
 
 
@@ -52,11 +49,12 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
+def generate_invite_token() -> str:
+    return secrets.token_urlsafe(24)
+
+
 def authenticate(db, username: str, password: str):
-    """Returns the AppUser if credentials are correct and the account is
-    active, else None. Doesn't distinguish 'wrong username' from 'wrong
-    password' in its return value - that distinction shouldn't be visible
-    to a caller trying to guess valid usernames."""
+    """Returns the AppUser if credentials are correct and active, else None."""
     from . import models
     user = (
         db.query(models.AppUser)
@@ -68,11 +66,28 @@ def authenticate(db, username: str, password: str):
     return user
 
 
-def create_token(user) -> str:
+def get_active_company_id(db, user) -> str:
+    """Which company is 'active' for this user's session. Someone can
+    belong to more than one company in the data model, but for now we just
+    pick their first membership - a company switcher UI can come later if
+    it's ever actually needed; most people belong to exactly one."""
+    from . import models
+    membership = (
+        db.query(models.CompanyMembership)
+        .filter(models.CompanyMembership.user_id == user.id)
+        .order_by(models.CompanyMembership.created_at)
+        .first()
+    )
+    return membership.company_id if membership else None
+
+
+def create_token(user, company_id: str) -> str:
     return _serializer.dumps({
         "user_id": user.id,
         "username": user.username,
         "display_name": user.display_name,
+        "company_id": company_id,
+        "is_platform_admin": user.is_platform_admin,
     })
 
 
@@ -85,7 +100,7 @@ def decode_token(token: str):
 
 
 # Paths that never require auth, even when accounts exist.
-EXEMPT_PATHS = {"/api/auth/login", "/api/auth/status", "/api/health"}
+EXEMPT_PATHS = {"/api/auth/login", "/api/auth/status", "/api/health", "/api/auth/register"}
 
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -110,8 +125,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
 
         # Stashed here so route handlers can know who's making the request
-        # (used to stamp changed_by on audit-logged edits with the real
-        # logged-in person, instead of trusting whatever the client sends).
+        # AND which company's data they should see - every query in every
+        # router needs to filter by this, or one business could see
+        # another's financial data.
         request.state.current_user = payload
 
         return await call_next(request)
@@ -119,7 +135,24 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 def get_current_username(request) -> str:
     """Best-effort: returns the logged-in person's display name if auth is
-    active and a valid token was presented, else None. Safe to call even
-    when auth is disabled entirely (just returns None)."""
+    active and a valid token was presented, else None."""
     user = getattr(request.state, "current_user", None)
     return user["display_name"] if user else None
+
+
+def get_current_company_id(request) -> str:
+    """The active company for this request. Returns None when auth isn't
+    required at all (single-tenant/fresh-install mode) - callers should
+    treat None as 'no company filtering' in that case, not as an error."""
+    user = getattr(request.state, "current_user", None)
+    return user["company_id"] if user else None
+
+
+def get_current_user_id(request) -> str:
+    user = getattr(request.state, "current_user", None)
+    return user["user_id"] if user else None
+
+
+def is_current_user_platform_admin(request) -> bool:
+    user = getattr(request.state, "current_user", None)
+    return bool(user and user.get("is_platform_admin"))
