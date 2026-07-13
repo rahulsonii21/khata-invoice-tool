@@ -21,6 +21,17 @@ name: Keep Backend Warm
 # well under that (150 minutes, ~2.5h) and then exits cleanly on its own -
 # it's always finished before the next one is ever due, so there's nothing
 # for GitHub to skip or collide with.
+#
+# DIAGNOSTIC NOTE (this comment added without touching the cron value
+# itself): GitHub can take 15 minutes to over an hour to recognize a
+# schedule after it changes, and this value has been edited several times
+# in quick succession while debugging this. A sibling workflow in this same
+# repo (scheduled-backup.yml, whose cron value has stayed untouched) keeps
+# firing correctly on its own schedule - proof the scheduler works fine
+# here overall, and this was very likely just an unresolved recognition
+# delay from repeated edits, not a broken design. This commit exists purely
+# to nudge a resync (a remedy GitHub staff have documented for exactly this
+# situation) without resetting the recognition clock again.
 
 on:
   schedule:
