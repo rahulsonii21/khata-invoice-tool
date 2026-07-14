@@ -1,0 +1,72 @@
+name: Render Keepalive Ping
+
+# Render's free tier sleeps a service after 15 minutes with no incoming
+# requests, and waking it back up takes 30-60 seconds.
+#
+# ATTEMPT 1 (superseded): cron every 10 minutes. GitHub documents scheduled
+# workflows as "best effort" and will delay/skip high-frequency schedules.
+# Checked the actual run history: only 3 runs happened over several hours,
+# nowhere near often enough.
+#
+# ATTEMPT 2 (superseded): cron every 4 hours, each job looping internally
+# for ~5h45m so it overlaps with the next scheduled job. This mostly worked,
+# but checking the run history showed the jobs consistently ending in
+# "cancelled" rather than "success" (right around GitHub's job timeout),
+# AND a real ~9-hour gap appeared once between two runs - very likely
+# because a long-running job was still executing when the next scheduled
+# trigger came due, and GitHub skipped/delayed that overlapping trigger
+# rather than running two at once.
+#
+# FIX: no overlap at all. Cron every 3 hours, each job runs internally for
+# well under that (150 minutes, ~2.5h) and then exits cleanly on its own -
+# it's always finished before the next one is ever due, so there's nothing
+# for GitHub to skip or collide with.
+#
+# DIAGNOSTIC NOTE (this comment added without touching the cron value
+# itself): GitHub can take 15 minutes to over an hour to recognize a
+# schedule after it changes, and this value has been edited several times
+# in quick succession while debugging this. A sibling workflow in this same
+# repo (scheduled-backup.yml, whose cron value has stayed untouched) keeps
+# firing correctly on its own schedule - proof the scheduler works fine
+# here overall, and this was very likely just an unresolved recognition
+# delay from repeated edits, not a broken design. This commit exists purely
+# to nudge a resync (a remedy GitHub staff have documented for exactly this
+# situation) without resetting the recognition clock again.
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 170 # comfortable margin above the 150-min internal loop
+    steps:
+      - name: Ping repeatedly for this job's lifetime
+        run: |
+          # Runs for 150 minutes (2.5h) internally, pinging every 8 minutes,
+          # then exits cleanly - well before the next scheduled job (3h
+          # later) is ever due, so there's no overlap to skip or collide.
+          #
+          # IMPORTANT: GitHub Actions runs this with `set -e` by default, so
+          # a bare `curl` that times out or fails at the network level (not
+          # just a bad HTTP status - an actual connection failure) aborts
+          # the ENTIRE script immediately. This bit us on an earlier version:
+          # Render was cold, curl's own --max-time timeout fired, and the
+          # whole job died after ~30 seconds instead of continuing to retry.
+          # The `|| response="000"` below is what actually matters - it
+          # converts a curl-level failure into a plain "000" status instead
+          # of letting it kill the script.
+          end_time=$((SECONDS + 150 * 60))
+          count=0
+          while [ $SECONDS -lt $end_time ]; do
+            response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 https://khata-invoice-tool-1.onrender.com/api/health 2>/dev/null) || response="000"
+            count=$((count + 1))
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Ping #$count -> HTTP $response"
+            if [ "$response" != "200" ]; then
+              echo "::warning::Ping #$count got $response instead of 200 (may just be a cold start still waking up)"
+            fi
+            sleep 480 || true
+          done
+          echo "Completed $count pings this run."
