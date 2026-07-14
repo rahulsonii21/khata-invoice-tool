@@ -111,9 +111,36 @@ app.add_middleware(auth.AuthMiddleware)
 
 # Set ALLOWED_ORIGINS to your Vercel URL(s) in production, e.g.
 # ALLOWED_ORIGINS=https://khata.vercel.app
-# Defaults to "*" so local development keeps working without any setup.
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "*")
-origins = [o.strip() for o in allowed_origins.split(",")] if allowed_origins != "*" else ["*"]
+#
+# CRITICAL BUG FIXED HERE: this used to default to "*" (wildcard) when the
+# env var wasn't set. That combined with allow_credentials=True below is an
+# actual CORS spec violation - you cannot serve Access-Control-Allow-Origin:
+# * together with Access-Control-Allow-Credentials: true. Real browsers
+# correctly detect this and SILENTLY BLOCK every authenticated request
+# (anything sending the Authorization header, i.e. almost everything past
+# login) - but curl and other non-browser tools don't enforce CORS at all,
+# so this was completely invisible to every test performed against this
+# app up to this point. Confirmed by directly reproducing it: with no
+# ALLOWED_ORIGINS set, an authenticated GET actually comes back as
+# `Access-Control-Allow-Origin: *` + `Access-Control-Allow-Credentials:
+# true` simultaneously - exactly the invalid combination - while the login
+# endpoint (which doesn't send an Authorization header) was unaffected,
+# matching the exact symptom reported: login works, everything else
+# silently fails as an opaque "Failed to fetch" with no visible error.
+#
+# Fix: default to the actual known production URL instead of a wildcard,
+# and refuse to start with an insecure wildcard+credentials combination at
+# all, rather than silently serving a config that browsers will reject.
+DEFAULT_ORIGINS = "http://localhost:4173,https://khata-invoice-tool.vercel.app"
+allowed_origins = os.getenv("ALLOWED_ORIGINS", DEFAULT_ORIGINS)
+origins = [o.strip() for o in allowed_origins.split(",")]
+
+if "*" in origins:
+    raise RuntimeError(
+        "ALLOWED_ORIGINS cannot be '*' when allow_credentials=True (CORS spec "
+        "violation - browsers will silently block every authenticated request). "
+        "Set ALLOWED_ORIGINS to your actual frontend URL(s), comma-separated."
+    )
 
 app.add_middleware(
     CORSMiddleware,
