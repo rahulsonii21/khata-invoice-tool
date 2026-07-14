@@ -38,7 +38,6 @@ export default function App() {
   const [needsLogin, setNeedsLogin] = useState(false)
   const [logoUrl, setLogoUrl] = useState(null)
   const [companyName, setCompanyName] = useState(null)
-  const [showingCachedData, setShowingCachedData] = useState(false)
   const [slowStart, setSlowStart] = useState(false)
 
   function checkAuth() {
@@ -74,44 +73,6 @@ export default function App() {
       window.removeEventListener('khata-auth-required', handler)
     }
   }, [])
-
-  useEffect(() => {
-    // The service worker tags responses served from its offline cache -
-    // this is a more reliable signal than navigator.onLine alone, since it
-    // reflects whether YOUR actual requests are succeeding, not just
-    // whether the network interface reports as connected.
-    const onOffline = () => setShowingCachedData(true)
-    const onOnline = () => setShowingCachedData(false)
-    window.addEventListener('khata-offline-data', onOffline)
-    window.addEventListener('khata-online-data', onOnline)
-    return () => {
-      window.removeEventListener('khata-offline-data', onOffline)
-      window.removeEventListener('khata-online-data', onOnline)
-    }
-  }, [])
-
-  useEffect(() => {
-    // The banner above only updates in reaction to actual requests - if
-    // someone hits a genuine offline moment, then just leaves the tab open
-    // on the same screen without triggering any new request, the banner
-    // would otherwise sit there indefinitely even long after the
-    // connection is actually fine again. Proactively re-check instead of
-    // waiting for the user to stumble into a new request that happens to
-    // fix it - both when the browser itself reports coming back online,
-    // and periodically for as long as the banner is actually showing.
-    function recheck() {
-      api.checkHealth().catch(() => {})
-    }
-    window.addEventListener('online', recheck)
-    let interval = null
-    if (showingCachedData) {
-      interval = setInterval(recheck, 30000)
-    }
-    return () => {
-      window.removeEventListener('online', recheck)
-      if (interval) clearInterval(interval)
-    }
-  }, [showingCachedData])
 
   useEffect(() => {
     if (!authChecked || needsLogin) return
@@ -155,11 +116,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-paper pb-16 sm:pb-0">
-      {showingCachedData && (
-        <div className="bg-marigold px-4 py-2 text-center text-sm font-medium text-white">
-          You're offline — showing the last synced data. New entries won't save until you're back online.
-        </div>
-      )}
       <nav className="border-b border-line bg-white px-4 py-3">
         <div className="mx-auto flex max-w-5xl items-center gap-4 overflow-x-auto">
           <div className="flex flex-shrink-0 items-center gap-2">

@@ -39,25 +39,11 @@ async function request(path, options = {}) {
     res = await fetch(`${BASE_URL}${path}`, { headers, ...options })
   } catch (e) {
     // fetch() itself rejecting (as opposed to resolving with a bad status)
-    // means a genuine network-level failure - could be no connection, or
-    // the service worker had nothing cached to fall back to for this
-    // request. Browsers deliberately report this as a generic "Failed to
-    // fetch" with no further detail, which was leaking straight through
-    // to screens as a raw, unhelpful error message. Treat it the same way
-    // as the SW-tagged offline case (same banner) and throw something a
-    // person can actually act on instead.
-    window.dispatchEvent(new Event('khata-offline-data'))
+    // means a genuine network-level failure. Browsers deliberately report
+    // this as a generic "Failed to fetch" with no further detail, which
+    // used to leak straight through to screens as a raw, unhelpful error.
+    // Give something a person can actually act on instead.
     throw new Error("Couldn't reach the server — check your connection and try again.")
-  }
-
-  // The service worker tags responses it served from its offline cache (used
-  // when the network genuinely failed) - surface this so the UI can show a
-  // clear "you're viewing cached data" banner rather than silently showing
-  // possibly-stale numbers as if they were current.
-  if (res.headers.get('X-Served-From-Cache') === 'true') {
-    window.dispatchEvent(new Event('khata-offline-data'))
-  } else if (res.ok) {
-    window.dispatchEvent(new Event('khata-online-data'))
   }
 
   if (res.status === 401) {
@@ -181,11 +167,6 @@ export const api = {
 
   // Auth
   getAuthStatus: () => fetch(`${BASE_URL}/api/auth/status`).then((r) => r.json()),
-  // Deliberately goes through request() (not a raw fetch, unlike the two
-  // above) - that's what makes the online/offline banner able to react to
-  // it, since only requests through that pipeline dispatch the events the
-  // banner listens for.
-  checkHealth: () => request('/api/health'),
   login: (username, password) =>
     fetch(`${BASE_URL}/api/auth/login`, {
       method: 'POST',
