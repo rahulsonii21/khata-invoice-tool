@@ -120,20 +120,23 @@ app.add_middleware(auth.AuthMiddleware)
 # (anything sending the Authorization header, i.e. almost everything past
 # login) - but curl and other non-browser tools don't enforce CORS at all,
 # so this was completely invisible to every test performed against this
-# app up to this point. Confirmed by directly reproducing it: with no
-# ALLOWED_ORIGINS set, an authenticated GET actually comes back as
-# `Access-Control-Allow-Origin: *` + `Access-Control-Allow-Credentials:
-# true` simultaneously - exactly the invalid combination - while the login
-# endpoint (which doesn't send an Authorization header) was unaffected,
-# matching the exact symptom reported: login works, everything else
-# silently fails as an opaque "Failed to fetch" with no visible error.
+# app up to this point.
 #
-# Fix: default to the actual known production URL instead of a wildcard,
-# and refuse to start with an insecure wildcard+credentials combination at
-# all, rather than silently serving a config that browsers will reject.
-DEFAULT_ORIGINS = "http://localhost:4173,https://khata-invoice-tool.vercel.app"
-allowed_origins = os.getenv("ALLOWED_ORIGINS", DEFAULT_ORIGINS)
-origins = [o.strip() for o in allowed_origins.split(",")]
+# FOLLOW-UP FIX: the first fix only helped if ALLOWED_ORIGINS was
+# completely unset. If it happens to be set on Render to something that
+# doesn't exactly match the real frontend URL (a typo, a stray space, an
+# old domain from before a rename, http instead of https, etc.), the env
+# var still takes priority and silently reintroduces the exact same
+# failure - login works, everything else fails with an opaque "Failed to
+# fetch". Rather than depend on that one env var being letter-perfect,
+# the known-correct production and local-dev URLs are now ALWAYS included
+# no matter what ALLOWED_ORIGINS contains, in addition to whatever's
+# configured there. Getting logged in but unable to load anything else
+# should not be possible to trigger via a CORS environment variable typo.
+KNOWN_GOOD_ORIGINS = ["http://localhost:4173", "https://khata-invoice-tool.vercel.app"]
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "")
+configured_origins = [o.strip() for o in allowed_origins.split(",") if o.strip()]
+origins = list(dict.fromkeys(configured_origins + KNOWN_GOOD_ORIGINS))  # dedup, preserve order
 
 if "*" in origins:
     raise RuntimeError(
