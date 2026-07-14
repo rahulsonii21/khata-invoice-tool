@@ -6,11 +6,28 @@ export default function Dashboard({ onOpenParty, onOpenSupplier }) {
   const [summary, setSummary] = useState(null)
   const [error, setError] = useState(null)
 
-  useEffect(() => {
+  function load() {
+    setError(null)
     api.getSummary().then(setSummary).catch((e) => setError(e.message))
+  }
+
+  useEffect(() => {
+    load()
   }, [])
 
-  if (error) return <div className="mx-auto max-w-5xl px-4 py-6 text-sm text-rust">{error}</div>
+  if (error) {
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-6 text-center">
+        <p className="text-sm text-rust">{error}</p>
+        <button
+          onClick={load}
+          className="mt-3 rounded-md border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-sage"
+        >
+          Try again
+        </button>
+      </div>
+    )
+  }
   if (!summary) return <div className="mx-auto max-w-5xl px-4 py-6 text-sm text-ink-faint">Loading…</div>
 
   return (

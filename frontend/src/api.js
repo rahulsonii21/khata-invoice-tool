@@ -34,7 +34,21 @@ async function request(path, options = {}) {
   const headers = options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  const res = await fetch(`${BASE_URL}${path}`, { headers, ...options })
+  let res
+  try {
+    res = await fetch(`${BASE_URL}${path}`, { headers, ...options })
+  } catch (e) {
+    // fetch() itself rejecting (as opposed to resolving with a bad status)
+    // means a genuine network-level failure - could be no connection, or
+    // the service worker had nothing cached to fall back to for this
+    // request. Browsers deliberately report this as a generic "Failed to
+    // fetch" with no further detail, which was leaking straight through
+    // to screens as a raw, unhelpful error message. Treat it the same way
+    // as the SW-tagged offline case (same banner) and throw something a
+    // person can actually act on instead.
+    window.dispatchEvent(new Event('khata-offline-data'))
+    throw new Error("Couldn't reach the server — check your connection and try again.")
+  }
 
   // The service worker tags responses it served from its offline cache (used
   // when the network genuinely failed) - surface this so the UI can show a
