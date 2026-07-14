@@ -40,9 +40,7 @@ async function request(path, options = {}) {
   // when the network genuinely failed) - surface this so the UI can show a
   // clear "you're viewing cached data" banner rather than silently showing
   // possibly-stale numbers as if they were current.
-  console.log('[DEBUG]', path, 'X-Served-From-Cache header:', res.headers.get('X-Served-From-Cache'))
   if (res.headers.get('X-Served-From-Cache') === 'true') {
-    console.log('[DEBUG] dispatching khata-offline-data')
     window.dispatchEvent(new Event('khata-offline-data'))
   } else if (res.ok) {
     window.dispatchEvent(new Event('khata-online-data'))
@@ -169,6 +167,11 @@ export const api = {
 
   // Auth
   getAuthStatus: () => fetch(`${BASE_URL}/api/auth/status`).then((r) => r.json()),
+  // Deliberately goes through request() (not a raw fetch, unlike the two
+  // above) - that's what makes the online/offline banner able to react to
+  // it, since only requests through that pipeline dispatch the events the
+  // banner listens for.
+  checkHealth: () => request('/api/health'),
   login: (username, password) =>
     fetch(`${BASE_URL}/api/auth/login`, {
       method: 'POST',

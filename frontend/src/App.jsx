@@ -91,6 +91,29 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    // The banner above only updates in reaction to actual requests - if
+    // someone hits a genuine offline moment, then just leaves the tab open
+    // on the same screen without triggering any new request, the banner
+    // would otherwise sit there indefinitely even long after the
+    // connection is actually fine again. Proactively re-check instead of
+    // waiting for the user to stumble into a new request that happens to
+    // fix it - both when the browser itself reports coming back online,
+    // and periodically for as long as the banner is actually showing.
+    function recheck() {
+      api.checkHealth().catch(() => {})
+    }
+    window.addEventListener('online', recheck)
+    let interval = null
+    if (showingCachedData) {
+      interval = setInterval(recheck, 30000)
+    }
+    return () => {
+      window.removeEventListener('online', recheck)
+      if (interval) clearInterval(interval)
+    }
+  }, [showingCachedData])
+
+  useEffect(() => {
     if (!authChecked || needsLogin) return
     api.getCompanySettings().then((s) => {
       setLogoUrl(s.logo_url || null)
