@@ -6,9 +6,22 @@ export default function Dashboard({ onOpenParty, onOpenSupplier }) {
   const [summary, setSummary] = useState(null)
   const [error, setError] = useState(null)
 
-  function load() {
+  function load(isRetry = false) {
     setError(null)
-    api.getSummary().then(setSummary).catch((e) => setError(e.message))
+    api.getSummary().then(setSummary).catch((e) => {
+      if (!isRetry) {
+        // The Dashboard is the very first thing that loads on open, which
+        // makes it the most likely to catch any brief, one-off hiccup (a
+        // service worker settling in, the tail end of a slow connection,
+        // etc). A single silent retry after a short pause smooths over
+        // exactly that kind of transient blip without bothering anyone -
+        // only a retry that ALSO fails shows the actual error and "Try
+        // again" button.
+        setTimeout(() => load(true), 1200)
+        return
+      }
+      setError(e.message)
+    })
   }
 
   useEffect(() => {
@@ -20,7 +33,7 @@ export default function Dashboard({ onOpenParty, onOpenSupplier }) {
       <div className="mx-auto max-w-5xl px-4 py-6 text-center">
         <p className="text-sm text-rust">{error}</p>
         <button
-          onClick={load}
+          onClick={() => load()}
           className="mt-3 rounded-md border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-sage"
         >
           Try again
