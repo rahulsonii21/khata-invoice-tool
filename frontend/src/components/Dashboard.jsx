@@ -25,7 +25,18 @@ export default function Dashboard({ onOpenParty, onOpenSupplier }) {
   }
 
   useEffect(() => {
-    load()
+    // A small deliberate delay before the very first attempt - on initial
+    // app load, this fires at almost the exact same instant as the nav's
+    // own company-settings fetch (for the logo/business name), both
+    // authenticated requests hitting the backend simultaneously. Every
+    // OTHER screen only ever makes a single request, never racing with
+    // anything - and Dashboard, being the very first thing to load, is the
+    // only place this exact collision can happen. Staggering it slightly
+    // gives the two requests a better chance of not landing on the
+    // database at the identical moment, in case the backend's connection
+    // pool is ever tight enough for that timing to matter.
+    const timer = setTimeout(() => load(), 200)
+    return () => clearTimeout(timer)
   }, [])
 
   if (error) {

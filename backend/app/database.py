@@ -9,7 +9,21 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./invoice_tool.db")
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+# pool_pre_ping: tests each connection with a lightweight query before
+# actually using it, transparently reconnecting if it's gone stale -
+# without this, a connection that Supabase's pooler silently dropped (which
+# poolers do to idle connections) surfaces as a confusing, intermittent
+# failure on whatever request happens to draw that dead connection next,
+# rather than SQLAlchemy just quietly getting a fresh one instead.
+# pool_recycle: proactively replaces connections older than this many
+# seconds, so a connection is refreshed well before a pooler's own idle
+# timeout would silently drop it out from under an in-flight request.
+engine_kwargs = {"connect_args": connect_args}
+if not DATABASE_URL.startswith("sqlite"):
+    engine_kwargs["pool_pre_ping"] = True
+    engine_kwargs["pool_recycle"] = 300
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
