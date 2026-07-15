@@ -20,7 +20,7 @@
 // bug. Bumping CACHE_NAME forces old, broken caches to be discarded for
 // anyone who already got stuck on a stale version.
 
-const CACHE_NAME = 'khata-shell-v3'
+const CACHE_NAME = 'khata-shell-v4'
 const STATIC_ASSETS = ['/manifest.json', '/icon-192.png', '/icon-512.png']
 
 self.addEventListener('install', (event) => {
