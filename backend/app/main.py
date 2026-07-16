@@ -181,7 +181,7 @@ app.add_middleware(auth.AuthMiddleware)
 # no matter what ALLOWED_ORIGINS contains, in addition to whatever's
 # configured there. Getting logged in but unable to load anything else
 # should not be possible to trigger via a CORS environment variable typo.
-KNOWN_GOOD_ORIGINS = ["http://localhost:4173", "https://lekha.vercel.app"]
+KNOWN_GOOD_ORIGINS = ["http://localhost:4173", "https://vrindavan-lekha.vercel.app"]
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "")
 configured_origins = [o.strip() for o in allowed_origins.split(",") if o.strip()]
 origins = list(dict.fromkeys(configured_origins + KNOWN_GOOD_ORIGINS))  # dedup, preserve order
