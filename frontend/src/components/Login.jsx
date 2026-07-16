@@ -75,8 +75,8 @@ export default function Login({ onSuccess }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-paper px-4">
       <div className="w-full max-w-xs rounded-lg border border-line bg-white p-6 text-center">
-        <span className="stamp mx-auto mb-3 inline-block px-3 py-1 text-sm font-semibold text-ink">खाता</span>
-        <h1 className="font-display text-xl font-semibold text-ink">Khata</h1>
+        <span className="stamp mx-auto mb-3 inline-block px-3 py-1 text-sm font-semibold text-ink">लेख</span>
+        <h1 className="font-display text-xl font-semibold text-ink">Lekha</h1>
         <p className="mt-1 text-sm text-ink-faint">{mode === 'login' ? 'Log in to continue' : 'Redeem your invite'}</p>
 
         {mode === 'login' ? (

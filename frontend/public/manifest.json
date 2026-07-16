@@ -1,6 +1,6 @@
 {
-  "name": "Khata - Invoice Ledger",
-  "short_name": "Khata",
+  "name": "Lekha - Invoice Ledger",
+  "short_name": "Lekha",
   "description": "Party-wise invoice ledger, billing, and OCR tool",
   "start_url": "/",
   "display": "standalone",

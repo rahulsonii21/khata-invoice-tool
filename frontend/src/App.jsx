@@ -100,7 +100,7 @@ export default function App() {
   if (!authChecked) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-paper px-4 text-center">
-        <span className="stamp px-3 py-1 text-sm font-semibold text-ink">खाता</span>
+        <span className="stamp px-3 py-1 text-sm font-semibold text-ink">लेख</span>
         <p className="text-sm text-ink-faint">
           {slowStart
             ? "Waking up the server — this can take up to a minute if the app hasn't been used in a while."
@@ -122,9 +122,9 @@ export default function App() {
             {logoUrl ? (
               <img src={resolveImageUrl(logoUrl)} alt={companyName || 'Logo'} className="h-8 w-8 rounded object-contain" />
             ) : (
-              <span className="stamp px-2 py-0.5 text-xs font-semibold text-ink">खाता</span>
+              <span className="stamp px-2 py-0.5 text-xs font-semibold text-ink">लेख</span>
             )}
-            <span className="font-display text-lg font-semibold text-ink">{companyName || 'Khata'}</span>
+            <span className="font-display text-lg font-semibold text-ink">{companyName || 'Lekha'}</span>
           </div>
           <div className="hidden gap-1 sm:flex">
             {TABS.map((t) => (
