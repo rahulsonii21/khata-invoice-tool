@@ -101,6 +101,54 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Invoice Management Tool API", lifespan=lifespan)
 
+# CRITICAL FIX: by default, an unhandled exception inside a route handler
+# causes Starlette to generate its own bare 500 response OUTSIDE the normal
+# middleware response path - which means it skips CORSMiddleware entirely,
+# with NO CORS headers at all. Browsers then block that response from ever
+# reaching the page's own JavaScript, since it looks like any other
+# CORS-violating response - even though the browser's own Network tab
+# still shows the real 500 underneath. This is exactly why the Dashboard
+# specifically kept failing with an opaque "Failed to fetch": a genuine
+# crash in that endpoint's code (a data record missing an expected
+# relationship - see the fix in dashboard.py) surfaced as a 500 in the
+# Network tab, but a network-level failure to the actual page.
+#
+# This handler catches any unhandled exception, logs the full traceback
+# (visible in Render's logs - previously invisible anywhere), and returns
+# an ordinary JSONResponse instead. Because it's an explicit response
+# rather than Starlette's own internal exception path, CORSMiddleware DOES
+# get to add its headers on the way out, so a genuine server bug now shows
+# up to the person using the app as an actual, readable error - not a
+# network failure that looks identical to a real connectivity problem.
+import logging
+import traceback
+from fastapi.responses import JSONResponse
+
+logger = logging.getLogger("uvicorn.error")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request, exc):
+    logger.error(f"Unhandled exception on {request.method} {request.url.path}:\n{traceback.format_exc()}")
+
+    # IMPORTANT: responses from an exception handler like this one do NOT
+    # pass back through CORSMiddleware, regardless of the order it was
+    # added in - verified directly (a deliberately crashing test endpoint
+    # came back with a real JSON body but zero CORS headers). The reliable
+    # fix, rather than fighting the middleware ordering further, is to add
+    # the necessary CORS headers directly on this response ourselves.
+    origin = request.headers.get("origin")
+    headers = {}
+    if origin and origin in origins:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Something went wrong on the server: {type(exc).__name__}"},
+        headers=headers,
+    )
+
 # AuthMiddleware is added BEFORE CORSMiddleware so that CORS ends up as the
 # outermost layer (Starlette wraps in reverse order of add_middleware calls).
 # This matters: without it, a 401 response from AuthMiddleware could be sent

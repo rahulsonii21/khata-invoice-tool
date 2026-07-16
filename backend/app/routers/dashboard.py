@@ -125,6 +125,7 @@ def get_summary(request: Request, db: Session = Depends(get_db)):
                 "party_name": pay.invoice.party.name,
             }
             for pay in recent_payments
+            if pay.invoice is not None and pay.invoice.party is not None
         ],
         "recent_invoices": [
             {
@@ -136,5 +137,6 @@ def get_summary(request: Request, db: Session = Depends(get_db)):
                 "is_overdue": inv.is_overdue,
             }
             for inv in recent_invoices
+            if inv.party is not None
         ],
     }
