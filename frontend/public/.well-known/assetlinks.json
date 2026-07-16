@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.vrindavan_lekha.twa",
+        "sha256_cert_fingerprints": ["B9:06:AE:33:4E:6F:03:9D:FE:CD:D6:6E:17:17:67:05:EA:DF:2E:EC:ED:C2:27:B2:7C:78:CC:3A:82:DE:87:E0"]
+      }
+    }]
