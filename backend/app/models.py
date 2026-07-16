@@ -31,7 +31,7 @@ class Party(Base):
     __tablename__ = "parties"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
-    company_id = Column(String, ForeignKey("companies.id"), nullable=True, index=True)
+    company_id = Column(String, nullable=True, index=True)  # no real FK constraint - see note above Company class
     name = Column(String, nullable=False, index=True)
     phone = Column(String, nullable=True)
     gstin = Column(String, nullable=True)
@@ -62,7 +62,7 @@ class Invoice(Base):
     __tablename__ = "invoices"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
-    company_id = Column(String, ForeignKey("companies.id"), nullable=True, index=True)
+    company_id = Column(String, nullable=True, index=True)  # no real FK constraint - see note above Company class
     party_id = Column(UUID(as_uuid=False), ForeignKey("parties.id"), nullable=False, index=True)
     invoice_number = Column(String, nullable=True)
     invoice_date = Column(Date, nullable=True, index=True)
@@ -115,7 +115,7 @@ class Payment(Base):
     __tablename__ = "payments"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
-    company_id = Column(String, ForeignKey("companies.id"), nullable=True, index=True)
+    company_id = Column(String, nullable=True, index=True)  # no real FK constraint - see note above Company class
     invoice_id = Column(UUID(as_uuid=False), ForeignKey("invoices.id"), nullable=False, index=True)
     amount = Column(Float, nullable=False)
     payment_date = Column(Date, nullable=False, default=date.today)
@@ -149,7 +149,7 @@ class CompanySettings(Base):
     __tablename__ = "company_settings"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
-    company_id = Column(String, ForeignKey("companies.id"), nullable=True, unique=True, index=True)
+    company_id = Column(String, nullable=True, unique=True, index=True)  # no real FK constraint - see note above Company class
     company_name = Column(String, nullable=True)
     gstin = Column(String, nullable=True)
     address = Column(Text, nullable=True)
@@ -173,7 +173,7 @@ class Supplier(Base):
     __tablename__ = "suppliers"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
-    company_id = Column(String, ForeignKey("companies.id"), nullable=True, index=True)
+    company_id = Column(String, nullable=True, index=True)  # no real FK constraint - see note above Company class
     name = Column(String, nullable=False, index=True)
     phone = Column(String, nullable=True)
     gstin = Column(String, nullable=True)
@@ -204,7 +204,7 @@ class Purchase(Base):
     __tablename__ = "purchases"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
-    company_id = Column(String, ForeignKey("companies.id"), nullable=True, index=True)
+    company_id = Column(String, nullable=True, index=True)  # no real FK constraint - see note above Company class
     supplier_id = Column(UUID(as_uuid=False), ForeignKey("suppliers.id"), nullable=False, index=True)
     purchase_number = Column(String, nullable=True)  # the supplier's own bill/invoice number
     purchase_date = Column(Date, nullable=True, index=True)
@@ -249,7 +249,7 @@ class PurchasePayment(Base):
     __tablename__ = "purchase_payments"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
-    company_id = Column(String, ForeignKey("companies.id"), nullable=True, index=True)
+    company_id = Column(String, nullable=True, index=True)  # no real FK constraint - see note above Company class
     purchase_id = Column(UUID(as_uuid=False), ForeignKey("purchases.id"), nullable=False, index=True)
     amount = Column(Float, nullable=False)
     payment_date = Column(Date, nullable=False, default=date.today)
@@ -296,18 +296,24 @@ class Company(Base):
     """
     __tablename__ = "companies"
 
-    # String, not UUID(as_uuid=False) - every column that references this
-    # (company_id on parties/invoices/etc) was retrofitted onto ALREADY
-    # existing production tables via a plain ALTER TABLE ADD COLUMN VARCHAR,
-    # not through create_all(), so they're genuinely VARCHAR in the real
-    # database regardless of what the Python model declares. A native UUID
-    # type here would make Postgres refuse to even create the foreign key
-    # constraint on a fresh install (mismatched types), and would cause a
-    # real, confirmed ProgrammingError ("operator does not exist: character
-    # varying = uuid") on every filtered query against existing production
-    # data - this was traced directly to a live 500 error, reproduced
-    # exactly against a real Postgres instance, and fixed here specifically.
-    id = Column(String, primary_key=True, default=gen_uuid)
+    # Native UUID, matching how this table was actually created in
+    # production via create_all() when multi-tenancy first launched -
+    # alongside CompanyMembership and Invite, all UUID together from day
+    # one, never touched by a migration. The 7 OTHER tables below (parties,
+    # invoices, payments, suppliers, purchases, purchase_payments,
+    # company_settings) are different: their company_id was retrofitted
+    # onto tables that already existed, via a plain ALTER TABLE ADD COLUMN
+    # VARCHAR - not through create_all() - so those really are VARCHAR in
+    # the real database and their models correctly declare String. This
+    # table is not one of those, and declaring it as String was actually
+    # the mistake that caused the login endpoint to start crashing right
+    # after that fix shipped - confirmed by precisely reproducing the real
+    # production schema history against a real local Postgres instance:
+    # attempting a fresh create_all() with Company.id as String, while
+    # company_memberships.company_id (created earlier, still UUID) already
+    # existed, failed with the exact same class of foreign-key type error
+    # this whole investigation has been chasing.
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
     name = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -322,7 +328,12 @@ class CompanyMembership(Base):
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
     user_id = Column(UUID(as_uuid=False), ForeignKey("app_users.id"), nullable=False, index=True)
-    company_id = Column(String, ForeignKey("companies.id"), nullable=False, index=True)
+    # UUID here, NOT String like the retrofitted tables below - this table
+    # was created fresh via create_all() alongside Company itself, both as
+    # native UUID from day one. Never touched by an ALTER TABLE migration,
+    # so its real column type in production was never mismatched and never
+    # needed changing.
+    company_id = Column(UUID(as_uuid=False), ForeignKey("companies.id"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -341,7 +352,9 @@ class Invite(Base):
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
     token = Column(String, nullable=False, unique=True, index=True)
-    company_id = Column(String, ForeignKey("companies.id"), nullable=True)
+    # UUID here, NOT String - same reasoning as CompanyMembership.company_id
+    # above: this table was created fresh alongside Company, never migrated.
+    company_id = Column(UUID(as_uuid=False), ForeignKey("companies.id"), nullable=True)
     created_by_user_id = Column(UUID(as_uuid=False), ForeignKey("app_users.id"), nullable=False)
     used_by_user_id = Column(UUID(as_uuid=False), ForeignKey("app_users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
