@@ -7,7 +7,10 @@ export default function PartyList({ onOpenParty }) {
   const [query, setQuery] = useState('')
   const [showNewForm, setShowNewForm] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newPhone, setNewPhone] = useState('')
   const [newGstin, setNewGstin] = useState('')
+  const [createError, setCreateError] = useState(null)
+  const [creating, setCreating] = useState(false)
   const [loadError, setLoadError] = useState(null)
 
   function reload() {
@@ -21,11 +24,20 @@ export default function PartyList({ onOpenParty }) {
 
   async function handleCreate() {
     if (!newName.trim()) return
-    await api.createParty({ name: newName.trim(), gstin: newGstin.trim() || null })
-    setNewName('')
-    setNewGstin('')
-    setShowNewForm(false)
-    reload()
+    setCreateError(null)
+    setCreating(true)
+    try {
+      await api.createParty({ name: newName.trim(), phone: newPhone.trim() || null, gstin: newGstin.trim() || null })
+      setNewName('')
+      setNewPhone('')
+      setNewGstin('')
+      setShowNewForm(false)
+      reload()
+    } catch (e) {
+      setCreateError(e.message)
+    } finally {
+      setCreating(false)
+    }
   }
 
   const filtered = parties.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()))
@@ -64,28 +76,39 @@ export default function PartyList({ onOpenParty }) {
       </div>
 
       {showNewForm && (
-        <div className="mb-4 flex gap-2 rounded-lg border border-line bg-white p-3">
-          <input
-            autoFocus
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            placeholder="Party name"
-            className="flex-1 rounded-md border border-line px-3 py-2 text-sm"
-          />
-          <input
-            value={newGstin}
-            onChange={(e) => setNewGstin(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            placeholder="GSTIN (optional)"
-            className="w-48 rounded-md border border-line px-3 py-2 text-sm"
-          />
-          <button
-            onClick={handleCreate}
-            className="rounded-md bg-ink px-4 py-2 text-sm font-medium text-paper hover:bg-ink-light"
-          >
-            Add
-          </button>
+        <div className="mb-4 space-y-2 rounded-lg border border-line bg-white p-3">
+          {createError && <p className="rounded-md bg-rust/10 px-3 py-2 text-sm text-rust">{createError}</p>}
+          <div className="flex gap-2">
+            <input
+              autoFocus
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              placeholder="Party name"
+              className="flex-1 rounded-md border border-line px-3 py-2 text-sm"
+            />
+            <input
+              value={newPhone}
+              onChange={(e) => setNewPhone(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              placeholder="Phone (for WhatsApp)"
+              className="w-44 rounded-md border border-line px-3 py-2 text-sm"
+            />
+            <input
+              value={newGstin}
+              onChange={(e) => setNewGstin(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              placeholder="GSTIN (optional)"
+              className="w-40 rounded-md border border-line px-3 py-2 text-sm"
+            />
+            <button
+              onClick={handleCreate}
+              disabled={creating}
+              className="rounded-md bg-ink px-4 py-2 text-sm font-medium text-paper hover:bg-ink-light disabled:opacity-50"
+            >
+              {creating ? 'Adding…' : 'Add'}
+            </button>
+          </div>
         </div>
       )}
 

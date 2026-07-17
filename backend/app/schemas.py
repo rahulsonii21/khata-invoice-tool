@@ -4,6 +4,38 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .models import InvoiceStatus, PaymentMode
 
 
+def normalize_indian_phone(v):
+    """
+    Validates and normalizes a phone number to a clean 10-digit Indian
+    mobile format, stripping spaces/dashes/parens/a leading +91 or 0.
+    Rejects anything that doesn't resolve to a real-looking 10-digit
+    mobile number (starting 6-9, per India's actual numbering plan) -
+    catching typos and garbled input right at save time, rather than only
+    discovering a broken number later when trying to send a WhatsApp bill
+    and having it silently fail or open a nonexistent chat.
+
+    Returns None for blank input (phone stays optional), the clean 10-digit
+    string otherwise. Raises ValueError with a clear message on anything
+    that doesn't fit - normalizing here means every OTHER place in the app
+    that reads party.phone (WhatsApp links, exports, display) can trust
+    it's already a clean, correctly-shaped number without redoing this
+    cleanup itself.
+    """
+    if not v or not v.strip():
+        return None
+    digits = "".join(ch for ch in v if ch.isdigit())
+    if digits.startswith("91") and len(digits) == 12:
+        digits = digits[2:]
+    elif digits.startswith("0") and len(digits) == 11:
+        digits = digits[1:]
+    if len(digits) != 10 or digits[0] not in "6789":
+        raise ValueError(
+            "That doesn't look like a valid 10-digit Indian mobile number - "
+            "double check it (e.g. 98765 43210)"
+        )
+    return digits
+
+
 # ---------- Party ----------
 class PartyCreate(BaseModel):
     name: str = Field(min_length=1)
@@ -23,6 +55,11 @@ class PartyCreate(BaseModel):
             raise ValueError("Name cannot be blank")
         return stripped
 
+    @field_validator("phone")
+    @classmethod
+    def phone_valid(cls, v):
+        return normalize_indian_phone(v)
+
 
 class PartyUpdate(BaseModel):
     name: Optional[str] = None
@@ -34,6 +71,11 @@ class PartyUpdate(BaseModel):
     email: Optional[str] = None
     notes: Optional[str] = None
     changed_by: Optional[str] = None
+
+    @field_validator("phone")
+    @classmethod
+    def phone_valid(cls, v):
+        return normalize_indian_phone(v)
 
 
 class PartyOut(BaseModel):
@@ -204,6 +246,11 @@ class SupplierCreate(BaseModel):
             raise ValueError("Name cannot be blank")
         return stripped
 
+    @field_validator("phone")
+    @classmethod
+    def phone_valid(cls, v):
+        return normalize_indian_phone(v)
+
 
 class SupplierUpdate(BaseModel):
     name: Optional[str] = None
@@ -215,6 +262,11 @@ class SupplierUpdate(BaseModel):
     email: Optional[str] = None
     notes: Optional[str] = None
     changed_by: Optional[str] = None
+
+    @field_validator("phone")
+    @classmethod
+    def phone_valid(cls, v):
+        return normalize_indian_phone(v)
 
 
 class SupplierOut(BaseModel):

@@ -24,6 +24,7 @@ export default function GenerateBill() {
   const [result, setResult] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
   const [activeParty, setActiveParty] = useState(null)
+  const [quickResult, setQuickResult] = useState(null)
 
   useEffect(() => {
     api.listParties().then(setParties).catch(() => {})
@@ -135,6 +136,29 @@ export default function GenerateBill() {
     }
   }
 
+  // The fast path: skips the preview step entirely for when there isn't
+  // time to double-check first - saves immediately, then a popup appears
+  // with sharing options right on top of the form (which stays exactly as
+  // it was), rather than navigating to a whole new screen. Matches how
+  // most billing apps handle this: save now, decide how to send it next,
+  // without losing your place if you need to start another bill right after.
+  async function handleQuickSave() {
+    setError(null)
+    const validItems = validateAndBuildPayload()
+    if (!validItems) return
+
+    setGenerating(true)
+    try {
+      const party = await ensureParty()
+      const res = await api.generateBill(buildBillData(party.id, validItems))
+      setQuickResult({ ...res, party })
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
   function backToEdit() {
     if (previewUrl) URL.revokeObjectURL(previewUrl)
     setPreviewUrl(null)
@@ -142,6 +166,7 @@ export default function GenerateBill() {
 
   function startNewBill() {
     setResult(null)
+    setQuickResult(null)
     setActiveParty(null)
     setBillNumber('')
     setDueDate('')
@@ -409,14 +434,90 @@ export default function GenerateBill() {
           </span>
         </div>
 
-        <button
-          onClick={handlePreview}
-          disabled={generating}
-          className="w-full rounded-md bg-ink py-2.5 text-sm font-medium text-paper hover:bg-ink-light disabled:opacity-50"
-        >
-          {generating ? 'Preparing preview…' : 'Preview bill'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handlePreview}
+            disabled={generating}
+            className="flex-1 rounded-md border border-ink/30 py-2.5 text-sm font-medium text-ink hover:bg-sage disabled:opacity-50"
+          >
+            {generating ? 'Preparing…' : 'Preview bill'}
+          </button>
+          <button
+            onClick={handleQuickSave}
+            disabled={generating}
+            className="flex-1 rounded-md bg-ink py-2.5 text-sm font-medium text-paper hover:bg-ink-light disabled:opacity-50"
+          >
+            {generating ? 'Saving…' : 'Save & share'}
+          </button>
+        </div>
       </div>
+
+      {quickResult && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={startNewBill}>
+          <div
+            className="w-full max-w-md rounded-t-2xl bg-paper p-4 sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-display text-lg font-semibold text-ink">Bill saved</h2>
+              <button onClick={startNewBill} className="text-ink-faint hover:text-ink">
+                ✕
+              </button>
+            </div>
+
+            <img
+              src={resolveImageUrl(quickResult.image_url)}
+              alt="Saved bill"
+              className="w-full rounded-lg border border-line"
+            />
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {quickResult.party?.phone && (
+                <button
+                  onClick={() =>
+                    openWhatsAppMessage(
+                      quickResult.party.phone,
+                      `Hi ${quickResult.party.name}, here's your bill${billNumber ? ` #${billNumber}` : ''} for ₹${quickResult.amount.toLocaleString('en-IN')}.`
+                    )
+                  }
+                  className="flex-1 rounded-md bg-[#25D366] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#20bd5a]"
+                >
+                  WhatsApp {quickResult.party.name}
+                </button>
+              )}
+              <button
+                onClick={async () => {
+                  const res = await fetch(resolveImageUrl(quickResult.image_url))
+                  const blob = await res.blob()
+                  await shareOrDownloadFile(blob, `bill_${billNumber || 'khata'}.jpg`, `Bill for ${quickResult.party?.name || ''}`)
+                }}
+                className="rounded-md border border-ink/30 px-4 py-2.5 text-sm font-medium text-ink hover:bg-sage"
+              >
+                Share
+              </button>
+              <a
+                href={resolveImageUrl(quickResult.image_url)}
+                download
+                className="rounded-md border border-ink/30 px-4 py-2.5 text-sm font-medium text-ink hover:bg-sage"
+              >
+                Download
+              </a>
+            </div>
+            {!quickResult.party?.phone && (
+              <p className="mt-2 text-xs text-ink-faint">
+                Add a phone number to {quickResult.party?.name}'s party details to enable direct WhatsApp sending.
+              </p>
+            )}
+
+            <button
+              onClick={startNewBill}
+              className="mt-3 w-full rounded-md py-2 text-xs font-medium text-ink-faint hover:bg-sage/30"
+            >
+              Create another bill
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

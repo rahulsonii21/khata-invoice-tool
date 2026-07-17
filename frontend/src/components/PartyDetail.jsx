@@ -12,6 +12,7 @@ export default function PartyDetail({ partyId, onBack }) {
   const [partyForm, setPartyForm] = useState({
     phone: '', gstin: '', address: '', city: '', pincode: '', email: '',
   })
+  const [editError, setEditError] = useState(null)
 
   function reload() {
     api.getParty(partyId).then((p) => {
@@ -35,16 +36,21 @@ export default function PartyDetail({ partyId, onBack }) {
   }, [partyId, monthFilter])
 
   async function savePartyDetails() {
-    await api.updateParty(partyId, {
-      phone: partyForm.phone || null,
-      gstin: partyForm.gstin || null,
-      address: partyForm.address || null,
-      city: partyForm.city || null,
-      pincode: partyForm.pincode || null,
-      email: partyForm.email || null,
-    })
-    setEditingParty(false)
-    reload()
+    setEditError(null)
+    try {
+      await api.updateParty(partyId, {
+        phone: partyForm.phone || null,
+        gstin: partyForm.gstin || null,
+        address: partyForm.address || null,
+        city: partyForm.city || null,
+        pincode: partyForm.pincode || null,
+        email: partyForm.email || null,
+      })
+      setEditingParty(false)
+      reload()
+    } catch (e) {
+      setEditError(e.message)
+    }
   }
 
   if (!party) return <div className="mx-auto max-w-5xl px-4 py-6 text-sm text-ink-faint">Loading…</div>
@@ -60,6 +66,7 @@ export default function PartyDetail({ partyId, onBack }) {
           <h1 className="font-display text-2xl font-semibold text-ink">{party.name}</h1>
           {editingParty ? (
             <div className="mt-3 max-w-lg rounded-lg border border-line bg-white p-3">
+              {editError && <p className="mb-2 rounded-md bg-rust/10 px-2 py-1.5 text-xs text-rust">{editError}</p>}
               <div className="grid grid-cols-2 gap-2">
                 <PartyField label="Phone">
                   <input

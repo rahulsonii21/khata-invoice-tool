@@ -4,6 +4,24 @@ const DISPLAY_NAME_KEY = 'khata_display_name'
 const COMPANY_NAME_KEY = 'khata_company_name'
 const IS_PLATFORM_ADMIN_KEY = 'khata_is_platform_admin'
 
+// FastAPI errors come in a couple of predictable shapes - a plain string
+// detail for a deliberate HTTPException, or a list of Pydantic validation
+// errors (one per invalid field) for a 422. Without this, the raw JSON -
+// braces, "loc", "ctx" and all - would leak straight through to whatever
+// error message the person actually sees on screen.
+function extractErrorMessage(responseText, status, statusText) {
+  try {
+    const parsed = JSON.parse(responseText)
+    if (typeof parsed.detail === 'string') return parsed.detail
+    if (Array.isArray(parsed.detail)) {
+      return parsed.detail.map((e) => e.msg?.replace(/^Value error,\s*/, '') || 'Invalid value').join('; ')
+    }
+  } catch (e) {
+    // not JSON, or not a shape we recognize - fall through to the raw text
+  }
+  return responseText ? `${status} ${statusText}: ${responseText}` : `${status} ${statusText}`
+}
+
 export function getToken() {
   return sessionStorage.getItem(TOKEN_KEY)
 }
@@ -55,7 +73,7 @@ async function request(path, options = {}) {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw new Error(`${res.status} ${res.statusText}: ${text}`)
+    throw new Error(extractErrorMessage(text, res.status, res.statusText))
   }
   if (res.status === 204) return null
   return res.json()
@@ -152,7 +170,7 @@ export const api = {
     }
     if (!res.ok) {
       const text = await res.text().catch(() => '')
-      throw new Error(`${res.status} ${res.statusText}: ${text}`)
+      throw new Error(extractErrorMessage(text, res.status, res.statusText))
     }
     return res.blob()
   },
