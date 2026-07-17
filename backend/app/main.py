@@ -78,6 +78,21 @@ ensure_index_exists("purchases", "purchase_date")
 ensure_index_exists("purchases", "due_date")
 ensure_index_exists("purchase_payments", "purchase_id")
 
+# company_id is now filtered on essentially every query in the app (that's
+# what makes multi-tenancy work), but it was added to these already-existing
+# tables via a bare ALTER TABLE - the model declaring index=True only
+# creates an actual index for a table built fresh via create_all(), not one
+# that already existed. Without this, every single query since multi-
+# tenancy launched has been doing a full table scan on company_id - fine at
+# small scale, a real and worsening problem as data grows.
+ensure_index_exists("parties", "company_id")
+ensure_index_exists("invoices", "company_id")
+ensure_index_exists("payments", "company_id")
+ensure_index_exists("suppliers", "company_id")
+ensure_index_exists("purchases", "company_id")
+ensure_index_exists("purchase_payments", "company_id")
+ensure_index_exists("company_settings", "company_id")
+
 # Prime the in-memory "is auth required" cache at startup, since it's derived
 # from whether any user accounts exist in the database - the middleware
 # checks this on every request and shouldn't have to query the DB each time.

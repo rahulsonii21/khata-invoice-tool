@@ -8,9 +8,11 @@ export default function PartyList({ onOpenParty }) {
   const [showNewForm, setShowNewForm] = useState(false)
   const [newName, setNewName] = useState('')
   const [newGstin, setNewGstin] = useState('')
+  const [loadError, setLoadError] = useState(null)
 
   function reload() {
-    api.listParties().then(setParties).catch(() => {})
+    setLoadError(null)
+    api.listParties().then(setParties).catch((e) => setLoadError(e.message))
   }
 
   useEffect(() => {
@@ -42,6 +44,15 @@ export default function PartyList({ onOpenParty }) {
           + New party
         </button>
       </header>
+
+      {loadError && (
+        <div className="mb-4 flex items-center justify-between rounded-md bg-rust/10 px-3 py-2 text-sm text-rust">
+          <span>{loadError}</span>
+          <button onClick={reload} className="font-medium underline hover:no-underline">
+            Try again
+          </button>
+        </div>
+      )}
 
       <div className="mb-4">
         <button

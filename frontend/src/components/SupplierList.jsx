@@ -8,9 +8,11 @@ export default function SupplierList({ onOpenSupplier }) {
   const [showNewForm, setShowNewForm] = useState(false)
   const [newName, setNewName] = useState('')
   const [newGstin, setNewGstin] = useState('')
+  const [loadError, setLoadError] = useState(null)
 
   function reload() {
-    api.listSuppliers().then(setSuppliers).catch(() => {})
+    setLoadError(null)
+    api.listSuppliers().then(setSuppliers).catch((e) => setLoadError(e.message))
   }
 
   useEffect(() => {
@@ -42,6 +44,15 @@ export default function SupplierList({ onOpenSupplier }) {
           + New supplier
         </button>
       </header>
+
+      {loadError && (
+        <div className="mb-4 flex items-center justify-between rounded-md bg-rust/10 px-3 py-2 text-sm text-rust">
+          <span>{loadError}</span>
+          <button onClick={reload} className="font-medium underline hover:no-underline">
+            Try again
+          </button>
+        </div>
+      )}
 
       {showNewForm && (
         <div className="mb-4 flex gap-2 rounded-lg border border-line bg-white p-3">
