@@ -140,6 +140,22 @@ export const api = {
 
   // Bill generation
   generateBill: (data) => request('/api/bills/generate', { method: 'POST', body: JSON.stringify(data) }),
+  previewBill: async (data) => {
+    const token = getToken()
+    const headers = { 'Content-Type': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    let res
+    try {
+      res = await fetch(`${BASE_URL}/api/bills/preview`, { method: 'POST', headers, body: JSON.stringify(data) })
+    } catch (e) {
+      throw new Error("Couldn't reach the server — check your connection and try again.")
+    }
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`${res.status} ${res.statusText}: ${text}`)
+    }
+    return res.blob()
+  },
   regenerateBill: (invoiceId, data) => request(`/api/bills/${invoiceId}/regenerate`, { method: 'PUT', body: JSON.stringify(data) }),
 
   // Suppliers (purchase ledger - payables)

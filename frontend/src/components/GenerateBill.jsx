@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
 import PartyAutocomplete from './PartyAutocomplete'
-import { resolveImageUrl, shareOrDownloadFile } from '../utils'
+import { resolveImageUrl, shareOrDownloadFile, openWhatsAppMessage } from '../utils'
 
 let rowId = 0
 const nextRowId = () => `row${++rowId}`
@@ -22,10 +22,22 @@ export default function GenerateBill() {
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState(null)
   const [result, setResult] = useState(null)
+  const [previewUrl, setPreviewUrl] = useState(null)
+  const [activeParty, setActiveParty] = useState(null)
 
   useEffect(() => {
     api.listParties().then(setParties).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    // Preview images are created via URL.createObjectURL, which holds
+    // memory until explicitly released - clean up whenever it changes or
+    // the screen is left, rather than leaking one every time someone
+    // previews a bill.
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    }
+  }, [previewUrl])
 
   function updateItem(id, field, value) {
     setItems((rows) => rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)))
@@ -43,46 +55,61 @@ export default function GenerateBill() {
   const gstTotal = subtotal * ((parseFloat(cgstPct) || 0) + (parseFloat(sgstPct) || 0) + (parseFloat(igstPct) || 0)) / 100
   const grandTotal = subtotal + gstTotal
 
-  async function handleGenerate() {
-    setError(null)
+  function validateAndBuildPayload() {
     if (!partyName.trim()) {
       setError('Party name is required.')
-      return
+      return null
     }
     const validItems = items.filter((r) => r.description.trim() && r.amount)
     if (validItems.length === 0) {
       setError('At least one item with a description and amount is required.')
-      return
+      return null
     }
+    return validItems
+  }
+
+  async function ensureParty() {
+    let party = parties.find((p) => p.name.toLowerCase() === partyName.toLowerCase())
+    if (!party) {
+      party = await api.createParty({ name: partyName.trim() })
+      setParties((p) => [...p, party])
+    }
+    setActiveParty(party)
+    return party
+  }
+
+  function buildBillData(partyId, validItems) {
+    return {
+      party_id: partyId,
+      bill_number: billNumber || null,
+      bill_date: billDate || null,
+      due_date: dueDate || null,
+      items: validItems.map((r) => ({
+        description: r.description,
+        qty_label: r.qty_label,
+        rate: r.rate ? parseFloat(r.rate) : null,
+        amount: parseFloat(r.amount),
+        hsn_code: r.hsn_code || null,
+      })),
+      cgst_pct: parseFloat(cgstPct) || 0,
+      sgst_pct: parseFloat(sgstPct) || 0,
+      igst_pct: parseFloat(igstPct) || 0,
+      shipped_by: shippedBy || null,
+      vehicle_number: vehicleNumber || null,
+      driver_contact: driverContact || null,
+    }
+  }
+
+  async function handlePreview() {
+    setError(null)
+    const validItems = validateAndBuildPayload()
+    if (!validItems) return
 
     setGenerating(true)
     try {
-      let party = parties.find((p) => p.name.toLowerCase() === partyName.toLowerCase())
-      if (!party) {
-        party = await api.createParty({ name: partyName.trim() })
-        setParties((p) => [...p, party])
-      }
-
-      const res = await api.generateBill({
-        party_id: party.id,
-        bill_number: billNumber || null,
-        bill_date: billDate || null,
-        due_date: dueDate || null,
-        items: validItems.map((r) => ({
-          description: r.description,
-          qty_label: r.qty_label,
-          rate: r.rate ? parseFloat(r.rate) : null,
-          amount: parseFloat(r.amount),
-          hsn_code: r.hsn_code || null,
-        })),
-        cgst_pct: parseFloat(cgstPct) || 0,
-        sgst_pct: parseFloat(sgstPct) || 0,
-        igst_pct: parseFloat(igstPct) || 0,
-        shipped_by: shippedBy || null,
-        vehicle_number: vehicleNumber || null,
-        driver_contact: driverContact || null,
-      })
-      setResult(res)
+      const party = await ensureParty()
+      const blob = await api.previewBill(buildBillData(party.id, validItems))
+      setPreviewUrl(URL.createObjectURL(blob))
     } catch (e) {
       setError(e.message)
     } finally {
@@ -90,8 +117,32 @@ export default function GenerateBill() {
     }
   }
 
+  async function handleConfirm() {
+    setError(null)
+    const validItems = validateAndBuildPayload()
+    if (!validItems || !activeParty) return
+
+    setGenerating(true)
+    try {
+      const res = await api.generateBill(buildBillData(activeParty.id, validItems))
+      setResult(res)
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+      setPreviewUrl(null)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  function backToEdit() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    setPreviewUrl(null)
+  }
+
   function startNewBill() {
     setResult(null)
+    setActiveParty(null)
     setBillNumber('')
     setDueDate('')
     setItems([{ id: nextRowId(), description: '', qty_label: '', rate: '', amount: '', hsn_code: '' }])
@@ -103,6 +154,7 @@ export default function GenerateBill() {
     setDriverContact('')
   }
 
+  // Screen 3: confirmed and saved - download, direct WhatsApp, general share
   if (result) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-6">
@@ -120,13 +172,14 @@ export default function GenerateBill() {
         />
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <a
-            href={resolveImageUrl(result.image_url)}
-            download
-            className="rounded-md bg-ink px-4 py-2 text-sm font-medium text-paper hover:bg-ink-light"
-          >
-            Download JPG
-          </a>
+          {activeParty?.phone && (
+            <button
+              onClick={() => openWhatsAppMessage(activeParty.phone, `Hi ${activeParty.name}, here's your bill${billNumber ? ` #${billNumber}` : ''} for ₹${grandTotal.toLocaleString('en-IN')}.`)}
+              className="flex items-center gap-1.5 rounded-md bg-[#25D366] px-4 py-2 text-sm font-medium text-white hover:bg-[#20bd5a]"
+            >
+              WhatsApp {activeParty.name}
+            </button>
+          )}
           <button
             onClick={async () => {
               const res = await fetch(resolveImageUrl(result.image_url))
@@ -137,6 +190,13 @@ export default function GenerateBill() {
           >
             Share
           </button>
+          <a
+            href={resolveImageUrl(result.image_url)}
+            download
+            className="rounded-md border border-ink/30 px-4 py-2 text-sm font-medium text-ink hover:bg-sage"
+          >
+            Download JPG
+          </a>
           <button
             onClick={startNewBill}
             className="rounded-md border border-line px-4 py-2 text-sm text-ink-faint hover:bg-sage/30"
@@ -144,10 +204,52 @@ export default function GenerateBill() {
             Create another bill
           </button>
         </div>
+        {!activeParty?.phone && (
+          <p className="mt-2 text-xs text-ink-faint">
+            Add a phone number to {partyName}'s party details to enable direct WhatsApp sending.
+          </p>
+        )}
       </div>
     )
   }
 
+  // Screen 2: preview before saving - matches how most billing apps let you
+  // check the bill looks right before it's actually committed to the ledger
+  if (previewUrl) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-6">
+        <header className="mb-6">
+          <h1 className="font-display text-2xl font-semibold text-ink">Preview</h1>
+          <p className="mt-1 text-sm text-ink-faint">
+            Nothing's saved yet - check it looks right, then confirm.
+          </p>
+        </header>
+
+        {error && <p className="mb-4 rounded-md bg-rust/10 px-3 py-2 text-sm text-rust">{error}</p>}
+
+        <img src={previewUrl} alt="Bill preview" className="w-full rounded-lg border border-line" />
+
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={handleConfirm}
+            disabled={generating}
+            className="flex-1 rounded-md bg-ink py-2.5 text-sm font-medium text-paper hover:bg-ink-light disabled:opacity-50"
+          >
+            {generating ? 'Saving…' : 'Confirm & save'}
+          </button>
+          <button
+            onClick={backToEdit}
+            disabled={generating}
+            className="rounded-md border border-line px-4 py-2.5 text-sm font-medium text-ink hover:bg-sage disabled:opacity-50"
+          >
+            Edit
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Screen 1: the form
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
       <header className="mb-6">
@@ -308,11 +410,11 @@ export default function GenerateBill() {
         </div>
 
         <button
-          onClick={handleGenerate}
+          onClick={handlePreview}
           disabled={generating}
           className="w-full rounded-md bg-ink py-2.5 text-sm font-medium text-paper hover:bg-ink-light disabled:opacity-50"
         >
-          {generating ? 'Generating…' : 'Generate bill'}
+          {generating ? 'Preparing preview…' : 'Preview bill'}
         </button>
       </div>
     </div>

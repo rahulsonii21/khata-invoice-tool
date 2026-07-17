@@ -94,6 +94,44 @@ def _render_bill(company, party, bill_number, bill_date, items, cgst_pct, sgst_p
     )
 
 
+@router.post("/preview")
+def preview_bill(payload: GenerateBillRequest, request: Request, db: Session = Depends(get_db)):
+    """
+    Renders the bill exactly as /generate would, but doesn't save anything -
+    no storage upload, no invoice record. Lets someone see precisely what
+    they're about to send before committing to it, the same way Vyapar and
+    similar billing apps show a preview before you confirm. Returns the raw
+    image bytes directly rather than a URL, since there's nothing persisted
+    to point a URL at.
+    """
+    company_id = auth.get_current_company_id(request)
+    party = db.query(models.Party).filter(models.Party.id == payload.party_id, models.Party.company_id == company_id).first()
+    if not party:
+        raise HTTPException(404, "Party not found")
+
+    if not payload.items:
+        raise HTTPException(422, "At least one item is required")
+
+    total_amount = sum(item.amount for item in payload.items)
+    grand_total = total_amount * (1 + (payload.cgst_pct + payload.sgst_pct + payload.igst_pct) / 100)
+    if grand_total <= 0:
+        raise HTTPException(422, "Bill total must be greater than zero")
+
+    company = _build_company_dict(db, company_id)
+
+    try:
+        image_bytes = _render_bill(
+            company, party, payload.bill_number, payload.bill_date, payload.items,
+            payload.cgst_pct, payload.sgst_pct, payload.igst_pct,
+            payload.shipped_by, payload.vehicle_number, payload.driver_contact,
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Bill preview failed: {e}")
+
+    from fastapi.responses import Response
+    return Response(content=image_bytes, media_type="image/jpeg")
+
+
 @router.post("/generate")
 def generate_bill(payload: GenerateBillRequest, request: Request, db: Session = Depends(get_db)):
     company_id = auth.get_current_company_id(request)
