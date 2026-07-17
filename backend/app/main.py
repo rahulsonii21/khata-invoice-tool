@@ -85,6 +85,24 @@ from .database import SessionLocal
 _startup_db = SessionLocal()
 try:
     auth.refresh_auth_required_cache(_startup_db)
+
+    # Safety net: ensure at least one platform admin exists. This matters
+    # for accounts created before multi-tenancy existed at all (is_platform_
+    # admin didn't exist as a concept yet) - when that column got added via
+    # migration, an already-existing account defaulted to False rather than
+    # True, even for someone who's clearly the actual founder here. Without
+    # this, nobody would ever be able to invite someone to start a new,
+    # separate company on this deployment. Promotes the very first account
+    # ever created (by created_at) only if literally nobody currently has
+    # platform-admin status - never demotes or second-guesses an existing
+    # admin, and never grants this to anyone if the deployment isn't
+    # actually missing one.
+    from . import models
+    if _startup_db.query(models.AppUser).filter(models.AppUser.is_platform_admin == True).count() == 0:  # noqa: E712
+        earliest_user = _startup_db.query(models.AppUser).order_by(models.AppUser.created_at).first()
+        if earliest_user:
+            earliest_user.is_platform_admin = True
+            _startup_db.commit()
 finally:
     _startup_db.close()
 
