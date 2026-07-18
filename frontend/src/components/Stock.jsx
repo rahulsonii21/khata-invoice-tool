@@ -7,6 +7,7 @@ export default function Stock() {
   const [loadError, setLoadError] = useState(null)
   const [showNewItem, setShowNewItem] = useState(false)
   const [showNewLocation, setShowNewLocation] = useState(false)
+  const [filterLocationId, setFilterLocationId] = useState(null) // null = show all locations
 
   function reload() {
     setLoadError(null)
@@ -21,6 +22,21 @@ export default function Stock() {
   useEffect(() => {
     reload()
   }, [])
+
+  async function removeLocation(location) {
+    if (!confirm(`Remove "${location.name}"? Any stock recorded there will be removed too - stock at your other places is untouched.`)) return
+    try {
+      await api.deleteStockLocation(location.id)
+      if (filterLocationId === location.id) setFilterLocationId(null)
+      reload()
+    } catch (e) {
+      alert(e.message)
+    }
+  }
+
+  const visibleLocations = filterLocationId
+    ? locations.filter((l) => l.id === filterLocationId)
+    : locations
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -74,6 +90,39 @@ export default function Stock() {
         />
       )}
 
+      {locations.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setFilterLocationId(null)}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+              filterLocationId === null ? 'bg-ink text-paper' : 'border border-line text-ink-faint hover:bg-sage'
+            }`}
+          >
+            All locations
+          </button>
+          {locations.map((loc) => (
+            <button
+              key={loc.id}
+              onClick={() => setFilterLocationId(loc.id)}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                filterLocationId === loc.id ? 'bg-ink text-paper' : 'border border-line text-ink-faint hover:bg-sage'
+              }`}
+            >
+              {loc.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {filterLocationId && (
+        <button
+          onClick={() => removeLocation(locations.find((l) => l.id === filterLocationId))}
+          className="mb-3 text-xs font-medium text-rust hover:underline"
+        >
+          Remove "{locations.find((l) => l.id === filterLocationId)?.name}"
+        </button>
+      )}
+
       {locations.length === 0 ? (
         <p className="rounded-lg border border-line bg-white p-4 text-sm text-ink-faint">
           Add your first location (like "Shop" or a godown name) to get started.
@@ -84,22 +133,22 @@ export default function Stock() {
             <thead>
               <tr className="border-b border-line bg-sage/40 text-left text-xs font-medium text-ink-faint">
                 <th className="px-4 py-2">Item</th>
-                {locations.map((loc) => (
+                {visibleLocations.map((loc) => (
                   <th key={loc.id} className="px-4 py-2 text-right whitespace-nowrap">{loc.name}</th>
                 ))}
-                <th className="px-4 py-2 text-right">Total</th>
+                {!filterLocationId && <th className="px-4 py-2 text-right">Total</th>}
               </tr>
             </thead>
             <tbody>
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={locations.length + 2} className="px-4 py-6 text-center text-ink-faint">
+                  <td colSpan={visibleLocations.length + 2} className="px-4 py-6 text-center text-ink-faint">
                     No items yet.
                   </td>
                 </tr>
               )}
               {items.map((item) => (
-                <ItemRow key={item.id} item={item} locations={locations} onChanged={reload} />
+                <ItemRow key={item.id} item={item} locations={visibleLocations} showTotal={!filterLocationId} onChanged={reload} />
               ))}
             </tbody>
           </table>
@@ -109,7 +158,7 @@ export default function Stock() {
   )
 }
 
-function ItemRow({ item, locations, onChanged }) {
+function ItemRow({ item, locations, showTotal, onChanged }) {
   const quantityFor = (locationId) => {
     const entry = item.stock_by_location.find((s) => s.location_id === locationId)
     return entry ? entry.quantity : 0
@@ -132,14 +181,16 @@ function ItemRow({ item, locations, onChanged }) {
           />
         </td>
       ))}
-      <td
-        className={`px-4 py-3 text-right font-medium tabular-nums ${
-          item.is_low_stock ? 'text-rust' : 'text-ink'
-        }`}
-      >
-        {item.total_quantity}
-        {item.is_low_stock && <div className="text-xs font-normal">low stock</div>}
-      </td>
+      {showTotal && (
+        <td
+          className={`px-4 py-3 text-right font-medium tabular-nums ${
+            item.is_low_stock ? 'text-rust' : 'text-ink'
+          }`}
+        >
+          {item.total_quantity}
+          {item.is_low_stock && <div className="text-xs font-normal">low stock</div>}
+        </td>
+      )}
     </tr>
   )
 }

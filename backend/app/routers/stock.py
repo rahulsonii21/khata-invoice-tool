@@ -23,11 +23,42 @@ def list_locations(request: Request, db: Session = Depends(get_db)):
 @router.post("/locations", response_model=schemas.StockLocationOut)
 def create_location(payload: schemas.StockLocationCreate, request: Request, db: Session = Depends(get_db)):
     company_id = auth.get_current_company_id(request)
+
+    # Case-insensitive duplicate check - "PG College Godown" and "pg college
+    # godown" are the same place typed twice, most likely by accident (a
+    # double-tap, or submitting twice not realizing the first one worked).
+    existing = (
+        db.query(models.StockLocation)
+        .filter(models.StockLocation.company_id == company_id)
+        .all()
+    )
+    if any(loc.name.strip().lower() == payload.name.strip().lower() for loc in existing):
+        raise HTTPException(409, f'A location named "{payload.name}" already exists')
+
     location = models.StockLocation(company_id=company_id, name=payload.name)
     db.add(location)
     db.commit()
     db.refresh(location)
     return location
+
+
+@router.delete("/locations/{location_id}")
+def delete_location(location_id: str, request: Request, db: Session = Depends(get_db)):
+    company_id = auth.get_current_company_id(request)
+    location = db.query(models.StockLocation).filter(
+        models.StockLocation.id == location_id, models.StockLocation.company_id == company_id
+    ).first()
+    if not location:
+        raise HTTPException(404, "Location not found")
+
+    # Removing a location also removes whatever stock records point at it -
+    # there's no meaningful state for "10 bags at a place that doesn't
+    # exist anymore". The item itself and its stock at every OTHER location
+    # is untouched.
+    db.query(models.ItemStock).filter(models.ItemStock.location_id == location_id).delete(synchronize_session=False)
+    db.delete(location)
+    db.commit()
+    return {"ok": True}
 
 
 # ---------- Items ----------
