@@ -148,7 +148,7 @@ export default function Stock() {
                 </tr>
               )}
               {items.map((item) => (
-                <ItemRow key={item.id} item={item} locations={visibleLocations} showTotal={!filterLocationId} onChanged={reload} />
+                <ItemRow key={item.id} item={item} locations={visibleLocations} allLocations={locations} showTotal={!filterLocationId} onChanged={reload} />
               ))}
             </tbody>
           </table>
@@ -158,8 +158,9 @@ export default function Stock() {
   )
 }
 
-function ItemRow({ item, locations, showTotal, onChanged }) {
+function ItemRow({ item, locations, allLocations, showTotal, onChanged }) {
   const [editing, setEditing] = useState(false)
+  const [transferring, setTransferring] = useState(false)
 
   const quantityFor = (locationId) => {
     const entry = item.stock_by_location.find((s) => s.location_id === locationId)
@@ -193,6 +194,25 @@ function ItemRow({ item, locations, showTotal, onChanged }) {
     )
   }
 
+  if (transferring) {
+    return (
+      <tr className="border-b border-line last:border-0 bg-sage/20">
+        <td colSpan={locations.length + (showTotal ? 2 : 1)} className="px-4 py-3">
+          <TransferForm
+            item={item}
+            locations={allLocations}
+            quantityFor={quantityFor}
+            onDone={() => {
+              setTransferring(false)
+              onChanged()
+            }}
+            onCancel={() => setTransferring(false)}
+          />
+        </td>
+      </tr>
+    )
+  }
+
   return (
     <tr className="border-b border-line last:border-0">
       <td className="px-4 py-3">
@@ -202,6 +222,11 @@ function ItemRow({ item, locations, showTotal, onChanged }) {
           <button onClick={() => setEditing(true)} className="text-xs font-medium text-ink-light hover:underline">
             Edit
           </button>
+          {allLocations.length >= 2 && (
+            <button onClick={() => setTransferring(true)} className="text-xs font-medium text-ink-light hover:underline">
+              Transfer
+            </button>
+          )}
           <button onClick={removeItem} className="text-xs font-medium text-rust hover:underline">
             Delete
           </button>
@@ -229,6 +254,84 @@ function ItemRow({ item, locations, showTotal, onChanged }) {
         </td>
       )}
     </tr>
+  )
+}
+
+function TransferForm({ item, locations, quantityFor, onDone, onCancel }) {
+  const [fromId, setFromId] = useState(locations[0]?.id || '')
+  const [toId, setToId] = useState(locations[1]?.id || '')
+  const [quantity, setQuantity] = useState('')
+  const [error, setError] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  const availableAtFrom = quantityFor(fromId)
+
+  async function submit() {
+    setError(null)
+    const qty = parseFloat(quantity)
+    if (!qty || qty <= 0) {
+      setError('Enter a quantity to transfer.')
+      return
+    }
+    if (fromId === toId) {
+      setError("Source and destination can't be the same place.")
+      return
+    }
+    setSaving(true)
+    try {
+      await api.transferStock(item.id, fromId, toId, qty)
+      onDone()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium text-ink">Transfer {item.name}</p>
+      {error && <p className="text-xs text-rust">{error}</p>}
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={fromId}
+          onChange={(e) => setFromId(e.target.value)}
+          className="rounded-md border border-line px-2 py-2 text-sm"
+        >
+          {locations.map((loc) => (
+            <option key={loc.id} value={loc.id}>{loc.name} ({quantityFor(loc.id)} available)</option>
+          ))}
+        </select>
+        <span className="text-ink-faint">→</span>
+        <select
+          value={toId}
+          onChange={(e) => setToId(e.target.value)}
+          className="rounded-md border border-line px-2 py-2 text-sm"
+        >
+          {locations.map((loc) => (
+            <option key={loc.id} value={loc.id}>{loc.name}</option>
+          ))}
+        </select>
+        <input
+          type="number"
+          value={quantity}
+          onChange={(e) => setQuantity(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && submit()}
+          placeholder={`Qty (max ${availableAtFrom})`}
+          className="w-32 rounded-md border border-line px-3 py-2 text-sm"
+        />
+        <button
+          onClick={submit}
+          disabled={saving}
+          className="rounded-md bg-ink px-3 py-2 text-sm font-medium text-paper hover:bg-ink-light disabled:opacity-50"
+        >
+          {saving ? 'Moving…' : 'Transfer'}
+        </button>
+        <button onClick={onCancel} className="rounded-md border border-line px-3 py-2 text-sm text-ink-faint">
+          Cancel
+        </button>
+      </div>
+    </div>
   )
 }
 

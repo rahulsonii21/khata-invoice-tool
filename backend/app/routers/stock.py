@@ -151,6 +151,59 @@ def set_stock(item_id: str, payload: schemas.StockSetRequest, request: Request, 
     return _to_out(item)
 
 
+@router.put("/items/{item_id}/transfer", response_model=schemas.ItemOut)
+def transfer_stock(item_id: str, payload: schemas.StockTransferRequest, request: Request, db: Session = Depends(get_db)):
+    """
+    Moves a quantity of one item from one location to another in a single
+    action - decreases the source, increases the destination, both at
+    once. This is what actually distinguishes a transfer from just editing
+    two numbers by hand: the two sides can never end up out of sync with
+    each other (e.g. someone updating the source but forgetting the
+    destination), since it's one atomic operation instead of two
+    independent edits.
+    """
+    company_id = auth.get_current_company_id(request)
+    item = db.query(models.Item).filter(models.Item.id == item_id, models.Item.company_id == company_id).first()
+    if not item:
+        raise HTTPException(404, "Item not found")
+
+    if payload.from_location_id == payload.to_location_id:
+        raise HTTPException(422, "Source and destination can't be the same place")
+
+    from_location = db.query(models.StockLocation).filter(
+        models.StockLocation.id == payload.from_location_id, models.StockLocation.company_id == company_id
+    ).first()
+    to_location = db.query(models.StockLocation).filter(
+        models.StockLocation.id == payload.to_location_id, models.StockLocation.company_id == company_id
+    ).first()
+    if not from_location or not to_location:
+        raise HTTPException(404, "Location not found")
+
+    from_entry = db.query(models.ItemStock).filter(
+        models.ItemStock.item_id == item_id, models.ItemStock.location_id == payload.from_location_id
+    ).first()
+    available = from_entry.quantity if from_entry else 0
+    if payload.quantity > available:
+        raise HTTPException(
+            422, f"Only {available} available at {from_location.name} - can't transfer {payload.quantity}"
+        )
+
+    from_entry.quantity -= payload.quantity
+
+    to_entry = db.query(models.ItemStock).filter(
+        models.ItemStock.item_id == item_id, models.ItemStock.location_id == payload.to_location_id
+    ).first()
+    if not to_entry:
+        to_entry = models.ItemStock(item_id=item_id, location_id=payload.to_location_id, quantity=payload.quantity)
+        db.add(to_entry)
+    else:
+        to_entry.quantity += payload.quantity
+
+    db.commit()
+    db.refresh(item)
+    return _to_out(item)
+
+
 @router.get("/low-stock", response_model=List[schemas.ItemOut])
 def low_stock_items(request: Request, db: Session = Depends(get_db)):
     """Separate, lightweight endpoint for the Dashboard rather than folding

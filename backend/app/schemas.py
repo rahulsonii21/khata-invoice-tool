@@ -491,3 +491,16 @@ class StockSetRequest(BaseModel):
         if v < 0:
             raise ValueError("Quantity can't be negative")
         return v
+
+
+class StockTransferRequest(BaseModel):
+    from_location_id: str
+    to_location_id: str
+    quantity: float
+
+    @field_validator("quantity")
+    @classmethod
+    def quantity_positive(cls, v):
+        if v <= 0:
+            raise ValueError("Transfer quantity must be greater than zero")
+        return v

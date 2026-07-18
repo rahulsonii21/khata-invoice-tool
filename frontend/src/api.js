@@ -186,6 +186,11 @@ export const api = {
   deleteItem: (id) => request(`/api/stock/items/${id}`, { method: 'DELETE' }),
   setItemStock: (itemId, locationId, quantity) =>
     request(`/api/stock/items/${itemId}/set`, { method: 'PUT', body: JSON.stringify({ location_id: locationId, quantity }) }),
+  transferStock: (itemId, fromLocationId, toLocationId, quantity) =>
+    request(`/api/stock/items/${itemId}/transfer`, {
+      method: 'PUT',
+      body: JSON.stringify({ from_location_id: fromLocationId, to_location_id: toLocationId, quantity }),
+    }),
   lowStockItems: () => request('/api/stock/low-stock'),
 
   // Suppliers (purchase ledger - payables)
