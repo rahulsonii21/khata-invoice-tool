@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .database import Base, engine, ensure_columns_exist, ensure_index_exists
-from .routers import parties, invoices, payments, dashboard, ocr, export, backup, settings, uploads, bills, auth_router, suppliers, purchases, purchase_payments
+from .routers import parties, invoices, payments, dashboard, ocr, export, backup, settings, uploads, bills, auth_router, suppliers, purchases, purchase_payments, stock
 from . import scheduler, auth
 
 # Creates tables if they don't exist (fine for SQLite/dev;
@@ -259,6 +259,7 @@ app.include_router(suppliers.router)
 app.include_router(purchases.router)
 app.include_router(purchase_payments.router)
 app.include_router(purchase_payments.standalone_router)
+app.include_router(stock.router)
 
 
 @app.get("/api/health")

@@ -15,6 +15,7 @@ const CompanySettings = lazy(() => import('./components/CompanySettings'))
 const GenerateBill = lazy(() => import('./components/GenerateBill'))
 const Reports = lazy(() => import('./components/Reports'))
 const SupplierList = lazy(() => import('./components/SupplierList'))
+const Stock = lazy(() => import('./components/Stock'))
 const SupplierDetail = lazy(() => import('./components/SupplierDetail'))
 const Accounts = lazy(() => import('./components/Accounts'))
 
@@ -24,6 +25,7 @@ const TABS = [
   { id: 'bill', label: 'Generate Bill' },
   { id: 'parties', label: 'Parties' },
   { id: 'suppliers', label: 'Suppliers' },
+  { id: 'stock', label: 'Stock' },
   { id: 'reports', label: 'Reports' },
   { id: 'backups', label: 'Backups' },
   { id: 'settings', label: 'Settings' },
@@ -173,6 +175,7 @@ export default function App() {
         {tab === 'backups' && <Backups />}
         {tab === 'settings' && <CompanySettings />}
         {tab === 'reports' && <Reports />}
+        {tab === 'stock' && <Stock />}
         {tab === 'accounts' && <Accounts onFirstAccountCreated={() => setNeedsLogin(false)} />}
       </Suspense>
 

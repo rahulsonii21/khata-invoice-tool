@@ -5,6 +5,7 @@ import { formatINR, STATUS_STYLES } from '../utils'
 export default function Dashboard({ onOpenParty, onOpenSupplier }) {
   const [summary, setSummary] = useState(null)
   const [error, setError] = useState(null)
+  const [lowStockItems, setLowStockItems] = useState([])
 
   function load(isRetry = false) {
     setError(null)
@@ -36,6 +37,10 @@ export default function Dashboard({ onOpenParty, onOpenSupplier }) {
     // database at the identical moment, in case the backend's connection
     // pool is ever tight enough for that timing to matter.
     const timer = setTimeout(() => load(), 200)
+    // Fetched separately and later, deliberately - stock alerts aren't
+    // core to the Dashboard the way the money totals are, and a failure
+    // here shouldn't block or delay the rest of the page from showing.
+    api.lowStockItems().then(setLowStockItems).catch(() => {})
     return () => clearTimeout(timer)
   }, [])
 
@@ -67,6 +72,22 @@ export default function Dashboard({ onOpenParty, onOpenSupplier }) {
         <StatCard label="Outstanding" value={summary.total_outstanding} tone="rust" />
         <StatCard label="Overdue" value={summary.total_overdue} tone="rust" sublabel={`${summary.overdue_count} invoice${summary.overdue_count !== 1 ? 's' : ''}`} />
       </div>
+
+      {lowStockItems.length > 0 && (
+        <section className="mt-6 rounded-lg border border-marigold/40 bg-marigold/5 p-4">
+          <h2 className="font-display text-base font-semibold text-ink">Running low</h2>
+          <ul className="mt-3 space-y-2">
+            {lowStockItems.map((item) => (
+              <li key={item.id} className="flex items-center justify-between rounded-md px-2 py-2 text-sm">
+                <span className="text-ink">{item.name}</span>
+                <span className="tabular-nums font-medium text-marigold">
+                  {item.total_quantity} {item.unit || ''} left
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {summary.top_overdue_parties?.length > 0 && (
         <section className="mt-6 rounded-lg border border-rust/30 bg-rust/5 p-4">

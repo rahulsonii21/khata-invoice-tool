@@ -407,3 +407,87 @@ class InviteOut(BaseModel):
     company_id: Optional[str] = None
     used_at: Optional[datetime] = None
     created_at: datetime
+
+
+# ---------- Stock / inventory ----------
+class StockLocationCreate(BaseModel):
+    name: str = Field(min_length=1)
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v):
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Name cannot be blank")
+        return stripped
+
+
+class StockLocationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    name: str
+    created_at: datetime
+
+
+class ItemCreate(BaseModel):
+    name: str = Field(min_length=1)
+    unit: Optional[str] = None
+    reorder_threshold: Optional[float] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v):
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Name cannot be blank")
+        return stripped
+
+    @field_validator("reorder_threshold")
+    @classmethod
+    def threshold_not_negative(cls, v):
+        if v is not None and v < 0:
+            raise ValueError("Reorder threshold can't be negative")
+        return v
+
+
+class ItemUpdate(BaseModel):
+    name: Optional[str] = None
+    unit: Optional[str] = None
+    reorder_threshold: Optional[float] = None
+
+    @field_validator("reorder_threshold")
+    @classmethod
+    def threshold_not_negative(cls, v):
+        if v is not None and v < 0:
+            raise ValueError("Reorder threshold can't be negative")
+        return v
+
+
+class ItemStockEntry(BaseModel):
+    location_id: str
+    location_name: str
+    quantity: float
+
+
+class ItemOut(BaseModel):
+    id: str
+    name: str
+    unit: Optional[str] = None
+    reorder_threshold: Optional[float] = None
+    created_at: datetime
+    created_by: Optional[str] = None
+    stock_by_location: List[ItemStockEntry] = []
+    total_quantity: float = 0
+    is_low_stock: bool = False
+
+
+class StockSetRequest(BaseModel):
+    location_id: str
+    quantity: float
+
+    @field_validator("quantity")
+    @classmethod
+    def quantity_not_negative(cls, v):
+        if v < 0:
+            raise ValueError("Quantity can't be negative")
+        return v

@@ -360,3 +360,74 @@ class Invite(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     used_at = Column(DateTime, nullable=True)
     expires_at = Column(DateTime, nullable=True)
+
+
+class StockLocation(Base):
+    """
+    A physical place stock actually sits - a shop counter, a godown, etc.
+    Deliberately just a name, nothing more, for now: no address, no manager,
+    no capacity - the whole point of starting simple is not building fields
+    nobody asked for yet. Company-scoped like everything else, so one
+    business's locations are never visible to another's.
+    """
+    __tablename__ = "stock_locations"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    company_id = Column(UUID(as_uuid=False), ForeignKey("companies.id"), nullable=True, index=True)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Item(Base):
+    """
+    Something you actually stock (a fertilizer, a seed variety, etc) -
+    separate from Party/Invoice entirely, since an item isn't a customer or
+    a bill, it's a physical thing sitting in one or more locations. unit is
+    deliberately a free-text label ("bag", "kg", "litre") rather than a
+    fixed list - whatever actually matches how a given item is counted,
+    with no forced conversion math between units.
+    """
+    __tablename__ = "items"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    company_id = Column(UUID(as_uuid=False), ForeignKey("companies.id"), nullable=True, index=True)
+    name = Column(String, nullable=False)
+    unit = Column(String, nullable=True)
+    # Alert threshold for the TOTAL across every location combined, not
+    # per-location - confirmed directly: what actually matters is "am I
+    # about to run out overall", not one specific godown dipping low while
+    # the others are fine.
+    reorder_threshold = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String, nullable=True)
+
+    stock_entries = relationship("ItemStock", back_populates="item", cascade="all, delete-orphan")
+
+    @property
+    def total_quantity(self):
+        return sum(s.quantity for s in self.stock_entries)
+
+    @property
+    def is_low_stock(self):
+        if self.reorder_threshold is None:
+            return False
+        return self.total_quantity < self.reorder_threshold
+
+
+class ItemStock(Base):
+    """
+    How much of one item sits at one location, right now. One row per
+    (item, location) pair - created lazily the first time a quantity is
+    actually set for that combination, rather than pre-creating a row for
+    every item at every location whether it's ever used there or not.
+    """
+    __tablename__ = "item_stock"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    item_id = Column(UUID(as_uuid=False), ForeignKey("items.id"), nullable=False, index=True)
+    location_id = Column(UUID(as_uuid=False), ForeignKey("stock_locations.id"), nullable=False, index=True)
+    quantity = Column(Float, nullable=False, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    item = relationship("Item", back_populates="stock_entries")
+    location = relationship("StockLocation")

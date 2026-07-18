@@ -176,6 +176,17 @@ export const api = {
   },
   regenerateBill: (invoiceId, data) => request(`/api/bills/${invoiceId}/regenerate`, { method: 'PUT', body: JSON.stringify(data) }),
 
+  // Stock / inventory
+  listStockLocations: () => request('/api/stock/locations'),
+  createStockLocation: (data) => request('/api/stock/locations', { method: 'POST', body: JSON.stringify(data) }),
+  listItems: () => request('/api/stock/items'),
+  createItem: (data) => request('/api/stock/items', { method: 'POST', body: JSON.stringify(data) }),
+  updateItem: (id, data) => request(`/api/stock/items/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteItem: (id) => request(`/api/stock/items/${id}`, { method: 'DELETE' }),
+  setItemStock: (itemId, locationId, quantity) =>
+    request(`/api/stock/items/${itemId}/set`, { method: 'PUT', body: JSON.stringify({ location_id: locationId, quantity }) }),
+  lowStockItems: () => request('/api/stock/low-stock'),
+
   // Suppliers (purchase ledger - payables)
   listSuppliers: () => request('/api/suppliers'),
   getSupplier: (id) => request(`/api/suppliers/${id}`),
