@@ -159,9 +159,38 @@ export default function Stock() {
 }
 
 function ItemRow({ item, locations, showTotal, onChanged }) {
+  const [editing, setEditing] = useState(false)
+
   const quantityFor = (locationId) => {
     const entry = item.stock_by_location.find((s) => s.location_id === locationId)
     return entry ? entry.quantity : 0
+  }
+
+  async function removeItem() {
+    if (!confirm(`Delete "${item.name}"? This removes its stock records at every location too.`)) return
+    try {
+      await api.deleteItem(item.id)
+      onChanged()
+    } catch (e) {
+      alert(e.message)
+    }
+  }
+
+  if (editing) {
+    return (
+      <tr className="border-b border-line last:border-0 bg-sage/20">
+        <td colSpan={locations.length + (showTotal ? 2 : 1)} className="px-4 py-3">
+          <EditItemForm
+            item={item}
+            onDone={() => {
+              setEditing(false)
+              onChanged()
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        </td>
+      </tr>
+    )
   }
 
   return (
@@ -169,6 +198,14 @@ function ItemRow({ item, locations, showTotal, onChanged }) {
       <td className="px-4 py-3">
         <div className="font-medium text-ink">{item.name}</div>
         {item.unit && <div className="text-xs text-ink-faint">{item.unit}</div>}
+        <div className="mt-1 flex gap-2">
+          <button onClick={() => setEditing(true)} className="text-xs font-medium text-ink-light hover:underline">
+            Edit
+          </button>
+          <button onClick={removeItem} className="text-xs font-medium text-rust hover:underline">
+            Delete
+          </button>
+        </div>
       </td>
       {locations.map((loc) => (
         <td key={loc.id} className="px-2 py-2 text-right">
@@ -192,6 +229,72 @@ function ItemRow({ item, locations, showTotal, onChanged }) {
         </td>
       )}
     </tr>
+  )
+}
+
+function EditItemForm({ item, onDone, onCancel }) {
+  const [name, setName] = useState(item.name)
+  const [unit, setUnit] = useState(item.unit || '')
+  const [threshold, setThreshold] = useState(item.reorder_threshold ?? '')
+  const [error, setError] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  async function submit() {
+    if (!name.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      await api.updateItem(item.id, {
+        name: name.trim(),
+        unit: unit.trim() || null,
+        reorder_threshold: threshold !== '' ? parseFloat(threshold) : null,
+      })
+      onDone()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-start gap-2">
+      <div className="min-w-[150px] flex-1">
+        {error && <p className="mb-2 text-xs text-rust">{error}</p>}
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && submit()}
+          className="w-full rounded-md border border-line px-3 py-2 text-sm"
+        />
+      </div>
+      <input
+        value={unit}
+        onChange={(e) => setUnit(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && submit()}
+        placeholder="Unit"
+        className="w-28 rounded-md border border-line px-3 py-2 text-sm"
+      />
+      <input
+        type="number"
+        value={threshold}
+        onChange={(e) => setThreshold(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && submit()}
+        placeholder="Alert below…"
+        className="w-28 rounded-md border border-line px-3 py-2 text-sm"
+      />
+      <button
+        onClick={submit}
+        disabled={saving}
+        className="rounded-md bg-ink px-3 py-2 text-sm font-medium text-paper hover:bg-ink-light disabled:opacity-50"
+      >
+        {saving ? 'Saving…' : 'Save'}
+      </button>
+      <button onClick={onCancel} className="rounded-md border border-line px-3 py-2 text-sm text-ink-faint">
+        Cancel
+      </button>
+    </div>
   )
 }
 
