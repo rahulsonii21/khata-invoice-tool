@@ -86,6 +86,7 @@ class Invoice(Base):
 
     party = relationship("Party", back_populates="invoices")
     payments = relationship("Payment", back_populates="invoice", cascade="all, delete-orphan")
+    stock_links = relationship("InvoiceStockLink", cascade="all, delete-orphan")
 
     @property
     def total_paid(self):
@@ -431,3 +432,22 @@ class ItemStock(Base):
 
     item = relationship("Item", back_populates="stock_entries")
     location = relationship("StockLocation")
+
+
+class InvoiceStockLink(Base):
+    """
+    Records that a specific quantity of a specific item, at a specific
+    location, was deducted because of a specific invoice - not just the
+    deduction itself (which just updates ItemStock directly), but a
+    traceable record OF that deduction. This is what makes it possible to
+    correctly give the stock back if the invoice is later deleted, rather
+    than the deduction being a one-way, unreversible side effect.
+    """
+    __tablename__ = "invoice_stock_links"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    invoice_id = Column(UUID(as_uuid=False), ForeignKey("invoices.id"), nullable=False, index=True)
+    item_id = Column(UUID(as_uuid=False), ForeignKey("items.id"), nullable=False)
+    location_id = Column(UUID(as_uuid=False), ForeignKey("stock_locations.id"), nullable=False)
+    quantity = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)

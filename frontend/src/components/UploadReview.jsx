@@ -4,6 +4,7 @@ import PartyAutocomplete from './PartyAutocomplete'
 import ManualEntry from './ManualEntry'
 import BulkPartyUpload from './BulkPartyUpload'
 import { compressImage } from '../utils'
+import StockItemsPicker, { stockItemsForPayload } from './StockItemsPicker'
 
 let idCounter = 0
 const nextId = () => `f${++idCounter}`
@@ -114,6 +115,7 @@ export default function UploadReview() {
         gst_amount: e.gst_amount ? parseFloat(e.gst_amount) : null,
         raw_image_url: item.result?.image_url ?? null,
         ocr_confidence: item.result?.confidence ?? null,
+        stock_items: stockItemsForPayload(e.stock_items || []),
       })
     } else {
       if (!entity) {
@@ -390,6 +392,10 @@ function ReviewPanel({ item, parties, direction, onChange, onSave }) {
             onChange={(ev) => onChange('gst_amount', ev.target.value)}
           />
         </Field>
+
+        {direction === 'customer' && (
+          <StockItemsPicker value={e.stock_items || []} onChange={(v) => onChange('stock_items', v)} />
+        )}
 
         <button
           onClick={onSave}

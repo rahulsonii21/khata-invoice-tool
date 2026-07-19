@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .. import models, storage, bill_generator, auth
+from .. import models, storage, bill_generator, auth, schemas, stock_deduction
 from ..database import get_db
 
 router = APIRouter(prefix="/api/bills", tags=["bills"])
@@ -31,6 +31,7 @@ class GenerateBillRequest(BaseModel):
     shipped_by: Optional[str] = None
     vehicle_number: Optional[str] = None
     driver_contact: Optional[str] = None
+    stock_items: Optional[List[schemas.SoldStockLine]] = None
 
 
 class RegenerateBillRequest(BaseModel):
@@ -191,6 +192,11 @@ def generate_bill(payload: GenerateBillRequest, request: Request, db: Session = 
     )
     invoice.refresh_status()
     db.add(invoice)
+    db.flush()  # so invoice.id exists before stock links reference it
+
+    if payload.stock_items:
+        stock_deduction.apply_stock_deduction(db, invoice, payload.stock_items, company_id)
+
     db.commit()
     db.refresh(invoice)
 

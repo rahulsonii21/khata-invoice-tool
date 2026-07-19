@@ -139,6 +139,7 @@ class InvoiceCreate(BaseModel):
     shipped_by: Optional[str] = None
     vehicle_number: Optional[str] = None
     driver_contact: Optional[str] = None
+    stock_items: Optional[List["SoldStockLine"]] = None
 
 
 class InvoiceUpdate(BaseModel):
@@ -503,4 +504,20 @@ class StockTransferRequest(BaseModel):
     def quantity_positive(cls, v):
         if v <= 0:
             raise ValueError("Transfer quantity must be greater than zero")
+        return v
+
+
+class SoldStockLine(BaseModel):
+    """One line of 'this stock item, from this specific location, this
+    many units' attached to a sale. Entirely optional on every invoice -
+    an invoice with none of these behaves exactly as it always has."""
+    item_id: str
+    location_id: str
+    quantity: float
+
+    @field_validator("quantity")
+    @classmethod
+    def quantity_positive(cls, v):
+        if v <= 0:
+            raise ValueError("Quantity sold must be greater than zero")
         return v

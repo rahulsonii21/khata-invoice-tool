@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../api'
 import PartyAutocomplete from './PartyAutocomplete'
 import { resolveImageUrl, shareOrDownloadFile, openWhatsAppMessage } from '../utils'
+import StockItemsPicker, { stockItemsForPayload } from './StockItemsPicker'
 
 let rowId = 0
 const nextRowId = () => `row${++rowId}`
@@ -25,6 +26,7 @@ export default function GenerateBill() {
   const [previewUrl, setPreviewUrl] = useState(null)
   const [activeParty, setActiveParty] = useState(null)
   const [quickResult, setQuickResult] = useState(null)
+  const [stockItems, setStockItems] = useState([])
 
   useEffect(() => {
     api.listParties().then(setParties).catch(() => {})
@@ -98,6 +100,7 @@ export default function GenerateBill() {
       shipped_by: shippedBy || null,
       vehicle_number: vehicleNumber || null,
       driver_contact: driverContact || null,
+      stock_items: stockItemsForPayload(stockItems),
     }
   }
 
@@ -177,6 +180,7 @@ export default function GenerateBill() {
     setShippedBy('')
     setVehicleNumber('')
     setDriverContact('')
+    setStockItems([])
   }
 
   // Screen 3: confirmed and saved - download, direct WhatsApp, general share
@@ -426,6 +430,8 @@ export default function GenerateBill() {
             />
           </Field>
         </div>
+
+        <StockItemsPicker value={stockItems} onChange={setStockItems} />
 
         <div className="flex items-center justify-between border-t border-line pt-3 text-sm">
           <span className="text-ink-faint">Grand total</span>

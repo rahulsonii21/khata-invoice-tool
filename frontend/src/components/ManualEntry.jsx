@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../api'
 import PartyAutocomplete from './PartyAutocomplete'
 import { compressImage } from '../utils'
+import StockItemsPicker, { stockItemsForPayload } from './StockItemsPicker'
 
 export default function ManualEntry({ direction = 'customer', onSaved }) {
   const [entities, setEntities] = useState([])
@@ -18,6 +19,7 @@ export default function ManualEntry({ direction = 'customer', onSaved }) {
   const [photoPreview, setPhotoPreview] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [stockItems, setStockItems] = useState([])
 
   const isCustomer = direction === 'customer'
   const entityLabel = isCustomer ? 'Party' : 'Supplier'
@@ -81,6 +83,7 @@ export default function ManualEntry({ direction = 'customer', onSaved }) {
           remarks: form.remarks || null,
           raw_image_url: image_url,
           ocr_confidence: null,
+          stock_items: stockItemsForPayload(stockItems),
         })
       } else {
         await api.createPurchase({
@@ -102,6 +105,7 @@ export default function ManualEntry({ direction = 'customer', onSaved }) {
       })
       setPhoto(null)
       setPhotoPreview(null)
+      setStockItems([])
       onSaved?.()
     } catch (e) {
       setError(e.message)
@@ -204,6 +208,8 @@ export default function ManualEntry({ direction = 'customer', onSaved }) {
             </label>
           )}
         </Field>
+
+        {isCustomer && <StockItemsPicker value={stockItems} onChange={setStockItems} />}
 
         <button
           onClick={handleSave}

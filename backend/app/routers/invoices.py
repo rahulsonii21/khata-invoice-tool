@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session, selectinload
 from typing import List, Optional
 
-from .. import models, schemas, auth
+from .. import models, schemas, auth, stock_deduction
 from ..database import get_db
 from ..audit import log_change
 
@@ -62,6 +62,7 @@ def create_invoice(payload: schemas.InvoiceCreate, request: Request, db: Session
         raise HTTPException(404, "Party not found - create the party first")
 
     data = payload.model_dump()
+    stock_items = data.pop("stock_items", None)
     data["created_by"] = auth.get_current_username(request)
     data["company_id"] = company_id
 
@@ -79,6 +80,13 @@ def create_invoice(payload: schemas.InvoiceCreate, request: Request, db: Session
     invoice = models.Invoice(**data)
     invoice.refresh_status()
     db.add(invoice)
+    db.flush()  # so invoice.id exists before stock links reference it
+
+    if stock_items:
+        stock_deduction.apply_stock_deduction(
+            db, invoice, [schemas.SoldStockLine(**s) for s in stock_items], company_id
+        )
+
     db.commit()
     db.refresh(invoice)
     return _to_out(invoice)
@@ -115,6 +123,7 @@ def delete_invoice(invoice_id: str, request: Request, db: Session = Depends(get_
     ).first()
     if not invoice:
         raise HTTPException(404, "Invoice not found")
+    stock_deduction.reverse_stock_deduction(db, invoice)
     db.delete(invoice)
     db.commit()
     return {"ok": True}
