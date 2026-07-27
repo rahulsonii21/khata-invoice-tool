@@ -41,3 +41,35 @@ async def extract_from_upload(file: UploadFile = File(...)):
     result["image_url"] = image_url
 
     return schemas.OCRExtractResult(**result)
+
+
+@router.post("/extract-order", response_model=schemas.OrderExtractResult)
+async def extract_order_from_upload(file: UploadFile = File(...)):
+    """
+    For Generate Bill's 'fill from photo' option - reads a screenshot or
+    photo of a casual order/message and returns a party name plus line
+    items to pre-fill the bill form with. Requires Gemini specifically
+    (not Tesseract): this needs actual reasoning about which numbers are
+    quantities vs amounts and where one item ends and the next begins,
+    not just character recognition. The source image is used only for
+    this one-time read and is not saved anywhere afterward.
+    """
+    if OCR_ENGINE != "gemini":
+        raise HTTPException(
+            502,
+            "Reading orders from a photo needs the Gemini OCR engine specifically - "
+            "set OCR_ENGINE=gemini and a working GEMINI_API_KEY to use this.",
+        )
+
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(400, "Empty file")
+
+    b64 = ocr.image_file_to_base64(contents)
+    mime_type = file.content_type or "image/jpeg"
+    try:
+        result = ocr.extract_order_data(b64, mime_type)
+    except RuntimeError as e:
+        raise HTTPException(502, str(e))
+
+    return schemas.OrderExtractResult(**result)

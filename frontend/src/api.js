@@ -111,6 +111,11 @@ export const api = {
     form.append('file', file)
     return request('/api/ocr/extract', { method: 'POST', body: form })
   },
+  extractOrder: (file) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request('/api/ocr/extract-order', { method: 'POST', body: form })
+  },
 
   // Plain image upload (no OCR) - used when attaching a photo during manual entry
   uploadImage: (file) => {

@@ -27,6 +27,8 @@ export default function GenerateBill() {
   const [activeParty, setActiveParty] = useState(null)
   const [quickResult, setQuickResult] = useState(null)
   const [stockItems, setStockItems] = useState([])
+  const [photoFilling, setPhotoFilling] = useState(false)
+  const [photoFillNote, setPhotoFillNote] = useState(null)
 
   useEffect(() => {
     api.listParties().then(setParties).catch(() => {})
@@ -52,6 +54,47 @@ export default function GenerateBill() {
 
   function removeRow(id) {
     setItems((rows) => (rows.length > 1 ? rows.filter((r) => r.id !== id) : rows))
+  }
+
+  async function handleFillFromPhoto(file) {
+    if (!file) return
+    setError(null)
+    setPhotoFillNote(null)
+    setPhotoFilling(true)
+    try {
+      const result = await api.extractOrder(file)
+      if (result.party_name) setPartyName(result.party_name)
+
+      if (result.items && result.items.length > 0) {
+        const filledRows = result.items.map((it) => ({
+          id: nextRowId(),
+          description: it.description || '',
+          qty_label: it.qty_label || '',
+          rate: '',
+          amount: it.amount != null ? String(it.amount) : '',
+          hsn_code: '',
+        }))
+        // Replace the rows only if the current ones are still empty -
+        // otherwise append, so filling a photo doesn't wipe out something
+        // already typed in by hand.
+        setItems((rows) => {
+          const hasRealContent = rows.some((r) => r.description.trim() || r.amount)
+          return hasRealContent ? [...rows, ...filledRows] : filledRows
+        })
+      }
+
+      if (result.confidence != null && result.confidence < 0.6) {
+        setPhotoFillNote(
+          "This wasn't very clear - double check everything below before generating the bill."
+        )
+      } else {
+        setPhotoFillNote('Filled in from the photo - review before generating.')
+      }
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setPhotoFilling(false)
+    }
   }
 
   const subtotal = items.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0)
@@ -289,6 +332,23 @@ export default function GenerateBill() {
       </header>
 
       {error && <p className="mb-4 rounded-md bg-rust/10 px-3 py-2 text-sm text-rust">{error}</p>}
+
+      <label className="mb-4 flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-ink/25 bg-sage/20 py-3 text-sm font-medium text-ink hover:bg-sage/30">
+        📷 {photoFilling ? 'Reading photo…' : 'Fill from photo (screenshot or picture of an order)'}
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          disabled={photoFilling}
+          onChange={(e) => {
+            handleFillFromPhoto(e.target.files[0])
+            e.target.value = ''
+          }}
+        />
+      </label>
+      {photoFillNote && (
+        <p className="mb-4 -mt-2 rounded-md bg-marigold/10 px-3 py-2 text-sm text-ink">{photoFillNote}</p>
+      )}
 
       <div className="space-y-4 rounded-lg border border-line bg-white p-4">
         <Field label="Party">

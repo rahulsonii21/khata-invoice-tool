@@ -202,6 +202,19 @@ class OCRExtractResult(BaseModel):
     image_url: Optional[str] = None
 
 
+class ExtractedOrderItem(BaseModel):
+    description: str
+    qty_label: Optional[str] = None
+    amount: Optional[float] = None
+
+
+class OrderExtractResult(BaseModel):
+    party_name: Optional[str] = None
+    items: List[ExtractedOrderItem] = []
+    confidence: Optional[float] = None
+    raw_text: Optional[str] = None
+
+
 # ---------- Company settings ----------
 class CompanySettingsUpdate(BaseModel):
     company_name: Optional[str] = None
