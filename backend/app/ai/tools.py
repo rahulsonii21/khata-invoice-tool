@@ -146,3 +146,143 @@ def calculate(db, company_id, expression: str) -> dict:
     except Exception as e:
         return {"error": f"Could not evaluate that: {e}"}
     return {"expression": expression, "result": result}
+
+
+# ---------- Phase 2: write actions ----------
+#
+# Every write action is split into a propose_* tool (checks for problems,
+# validates, but writes NOTHING) and a confirm_* tool (does the actual
+# write) - the system prompt requires the agent to call propose_*, show
+# the user exactly what it's about to do, and wait for an explicit yes
+# before ever calling confirm_*. confirm_* re-validates its arguments
+# through the exact same Pydantic rules the real API endpoints use
+# (phone format, name not blank, etc), so even if the model restates the
+# details slightly wrong when confirming, invalid data still can't get
+# through - it fails validation instead of silently creating something
+# wrong.
+
+def propose_create_party(db, company_id, name: str, phone: str = None, gstin: str = None,
+                          address: str = None, city: str = None, notes: str = None) -> dict:
+    """Checks for a likely-duplicate party BEFORE proposing creation - if
+    Vyapar/myBillBook-style close-name matches exist, surfaces them instead
+    of silently creating a second party for someone already in the system."""
+    from .. import schemas
+    from pydantic import ValidationError
+
+    existing = db.query(models.Party).filter(models.Party.company_id == company_id).all()
+    close_matches = [p for p in existing if _names_similar(p.name, name)]
+    if close_matches:
+        return {
+            "duplicate_warning": True,
+            "requires_confirmation": False,
+            "existing_matches": [{"id": p.id, "name": p.name, "phone": p.phone} for p in close_matches],
+            "message": "A similarly-named party already exists - ask the user whether they meant this existing one, or genuinely want a new, separate party.",
+        }
+
+    try:
+        validated = schemas.PartyCreate(name=name, phone=phone, gstin=gstin, address=address, city=city, notes=notes)
+    except ValidationError as e:
+        return {"error": _first_validation_message(e)}
+
+    return {
+        "requires_confirmation": True,
+        "action": "create_party",
+        "args": validated.model_dump(),
+        "summary": f"Create a new party '{validated.name}'" + (f" (phone {validated.phone})" if validated.phone else "") + "?",
+    }
+
+
+def confirm_create_party(db, company_id, name: str, phone: str = None, gstin: str = None,
+                          address: str = None, city: str = None, notes: str = None) -> dict:
+    """Actually creates the party - only ever called after the user has
+    explicitly confirmed a propose_create_party summary."""
+    from .. import schemas
+    from pydantic import ValidationError
+
+    try:
+        validated = schemas.PartyCreate(name=name, phone=phone, gstin=gstin, address=address, city=city, notes=notes)
+    except ValidationError as e:
+        return {"error": _first_validation_message(e)}
+
+    party = models.Party(**validated.model_dump(), company_id=company_id, created_by="Lekha AI")
+    db.add(party)
+    db.commit()
+    db.refresh(party)
+    return {"created": True, "party_id": party.id, "party_name": party.name}
+
+
+def propose_create_invoice(db, company_id, party_name: str, amount: float,
+                            invoice_date: str = None, due_date: str = None) -> dict:
+    """Resolves the party by name first (with the same ambiguity handling
+    as get_party_balance) and validates the amount, before ever proposing
+    the actual write."""
+    matches = (
+        db.query(models.Party)
+        .filter(models.Party.company_id == company_id)
+        .filter(models.Party.name.ilike(f"%{party_name.strip()}%"))
+        .all()
+    )
+    if not matches:
+        return {"error": f"No party found matching '{party_name}' - create the party first, or check the spelling."}
+    if len(matches) > 1:
+        return {
+            "requires_confirmation": False,
+            "ambiguous": True,
+            "matches": [{"id": p.id, "name": p.name} for p in matches],
+            "message": "More than one party matches - ask the user which one they mean.",
+        }
+    if amount <= 0:
+        return {"error": "Amount must be greater than zero."}
+
+    party = matches[0]
+    return {
+        "requires_confirmation": True,
+        "action": "create_invoice",
+        "args": {"party_id": party.id, "amount": amount, "invoice_date": invoice_date, "due_date": due_date},
+        "summary": f"Create an invoice of ₹{amount:,.0f} for {party.name}" + (f" dated {invoice_date}" if invoice_date else "") + "?",
+    }
+
+
+def confirm_create_invoice(db, company_id, party_id: str, amount: float,
+                            invoice_date: str = None, due_date: str = None) -> dict:
+    """Actually creates the invoice - only ever called after explicit
+    confirmation, and always with the exact party_id a propose_ step
+    already resolved (never re-searching by name here)."""
+    from .. import schemas
+    from pydantic import ValidationError
+
+    party = db.query(models.Party).filter(models.Party.id == party_id, models.Party.company_id == company_id).first()
+    if not party:
+        return {"error": "That party no longer matches this company - please search again."}
+
+    try:
+        validated = schemas.InvoiceCreate(party_id=party_id, amount=amount, invoice_date=invoice_date, due_date=due_date)
+    except ValidationError as e:
+        return {"error": _first_validation_message(e)}
+
+    data = validated.model_dump()
+    data.pop("stock_items", None)
+    invoice = models.Invoice(**data, company_id=company_id, created_by="Lekha AI")
+    invoice.refresh_status()
+    db.add(invoice)
+    db.commit()
+    db.refresh(invoice)
+    return {"created": True, "invoice_id": invoice.id, "party_name": party.name, "amount": invoice.amount}
+
+
+def _names_similar(a: str, b: str) -> bool:
+    """Simple, dependency-free closeness check: same after lowering case
+    and stripping whitespace, or one is fully contained in the other.
+    Good enough to catch 'Ramesh Traders' vs 'ramesh traders ' or
+    'Ramesh' vs 'Ramesh Traders' - not a fuzzy-typo matcher, deliberately
+    conservative so it doesn't block genuinely different parties."""
+    a_norm = " ".join(a.lower().split())
+    b_norm = " ".join(b.lower().split())
+    return a_norm == b_norm or a_norm in b_norm or b_norm in a_norm
+
+
+def _first_validation_message(e) -> str:
+    errors = e.errors()
+    if errors:
+        return errors[0].get("msg", str(e))
+    return str(e)

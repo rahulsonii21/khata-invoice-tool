@@ -59,6 +59,66 @@ TOOL_DECLARATIONS = [
             "required": ["expression"],
         },
     },
+    {
+        "name": "propose_create_party",
+        "description": "Check for duplicates and validate details for a new party (customer), WITHOUT creating anything yet. Always call this before confirm_create_party - never create a party without first proposing it and getting the user's explicit yes.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "phone": {"type": "string", "description": "10-digit Indian mobile number, if given"},
+                "gstin": {"type": "string"},
+                "address": {"type": "string"},
+                "city": {"type": "string"},
+                "notes": {"type": "string"},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "confirm_create_party",
+        "description": "Actually creates the party. Only call this after propose_create_party succeeded (requires_confirmation: true) AND the user has explicitly said yes/confirmed - use the exact same arguments from the proposal.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "phone": {"type": "string"},
+                "gstin": {"type": "string"},
+                "address": {"type": "string"},
+                "city": {"type": "string"},
+                "notes": {"type": "string"},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "propose_create_invoice",
+        "description": "Resolve the party and validate an invoice amount, WITHOUT creating anything yet. Always call this before confirm_create_invoice.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "party_name": {"type": "string"},
+                "amount": {"type": "number"},
+                "invoice_date": {"type": "string", "description": "YYYY-MM-DD, if given"},
+                "due_date": {"type": "string", "description": "YYYY-MM-DD, if given"},
+            },
+            "required": ["party_name", "amount"],
+        },
+    },
+    {
+        "name": "confirm_create_invoice",
+        "description": "Actually creates the invoice. Only call this after propose_create_invoice succeeded (requires_confirmation: true) AND the user has explicitly said yes/confirmed - use the exact party_id it returned, not the party name.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "party_id": {"type": "string"},
+                "amount": {"type": "number"},
+                "invoice_date": {"type": "string"},
+                "due_date": {"type": "string"},
+            },
+            "required": ["party_id", "amount"],
+        },
+    },
 ]
 
 # Maps a tool name to the actual Python function that implements it -

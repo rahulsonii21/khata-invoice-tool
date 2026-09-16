@@ -22,12 +22,12 @@ const Accounts = lazy(() => import('./components/Accounts'))
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
+  { id: 'ai', label: 'Lekha AI' },
   { id: 'upload', label: 'Upload' },
   { id: 'bill', label: 'Generate Bill' },
   { id: 'parties', label: 'Parties' },
   { id: 'suppliers', label: 'Suppliers' },
   { id: 'stock', label: 'Stock' },
-  { id: 'ai', label: 'Lekha AI' },
   { id: 'reports', label: 'Reports' },
   { id: 'backups', label: 'Backups' },
   { id: 'settings', label: 'Settings' },
