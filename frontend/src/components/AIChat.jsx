@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { api } from '../api'
 import { openWhatsAppMessage } from '../utils'
+import VoiceChat from './VoiceChat'
 
 const SUGGESTIONS = [
   'How much is outstanding?',
@@ -10,6 +11,7 @@ const SUGGESTIONS = [
 ]
 
 export default function AIChat() {
+  const [voiceMode, setVoiceMode] = useState(false)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -41,13 +43,36 @@ export default function AIChat() {
     }
   }
 
+  if (voiceMode) {
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setVoiceMode(false)}
+          className="absolute right-4 top-4 z-10 rounded-md border border-line bg-white px-3 py-1.5 text-xs font-medium text-ink hover:bg-sage/40"
+        >
+          ← Text chat
+        </button>
+        <VoiceChat />
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-2xl flex-col px-4 py-6">
-      <header className="mb-4">
-        <h1 className="font-display text-2xl font-semibold text-ink">Lekha AI</h1>
-        <p className="mt-1 text-sm text-ink-faint">
-          Ask about balances, stock, or do a calculation. Text only for now, and read-only - it can look things up but can't yet create or change anything.
-        </p>
+      <header className="mb-4 flex items-start justify-between">
+        <div>
+          <h1 className="font-display text-2xl font-semibold text-ink">Lekha AI</h1>
+          <p className="mt-1 text-sm text-ink-faint">
+            Ask about balances, stock, or do a calculation. Text only for now, and read-only - it can look things up but can't yet create or change anything.
+          </p>
+        </div>
+        <button
+          onClick={() => setVoiceMode(true)}
+          className="shrink-0 rounded-full bg-ink px-3 py-2 text-sm text-paper hover:bg-ink-light"
+          title="Talk to Lekha"
+        >
+          🎙️
+        </button>
       </header>
 
       <div className="flex-1 space-y-3 overflow-y-auto rounded-lg border border-line bg-white p-4">
