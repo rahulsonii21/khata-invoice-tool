@@ -211,6 +211,12 @@ def low_stock_items(request: Request, db: Session = Depends(get_db)):
     growing any further after it was the exact endpoint that once crashed
     from doing too much at once."""
     company_id = auth.get_current_company_id(request)
+    return compute_low_stock_items(db, company_id)
+
+
+def compute_low_stock_items(db: Session, company_id):
+    """Separated so other callers (Lekha AI's tools) can reuse the exact
+    same logic without a second implementation."""
     items = (
         db.query(models.Item)
         .options(selectinload(models.Item.stock_entries))

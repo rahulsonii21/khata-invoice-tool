@@ -534,3 +534,23 @@ class SoldStockLine(BaseModel):
         if v <= 0:
             raise ValueError("Quantity sold must be greater than zero")
         return v
+
+
+# ---------- Lekha AI ----------
+class AIChatMessage(BaseModel):
+    role: str  # "user" or "model"
+    text: str
+
+
+class AIChatRequest(BaseModel):
+    history: List[AIChatMessage]  # includes the newest user message as the last entry
+
+
+class AIToolCallOut(BaseModel):
+    name: str
+    args: dict
+
+
+class AIChatResponse(BaseModel):
+    reply: str
+    tool_calls: List[AIToolCallOut] = []

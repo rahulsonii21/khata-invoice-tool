@@ -183,6 +183,7 @@ export const api = {
 
   // Stock / inventory
   listStockLocations: () => request('/api/stock/locations'),
+  aiChat: (history) => request('/api/ai/chat', { method: 'POST', body: JSON.stringify({ history }) }),
   createStockLocation: (data) => request('/api/stock/locations', { method: 'POST', body: JSON.stringify(data) }),
   deleteStockLocation: (id) => request(`/api/stock/locations/${id}`, { method: 'DELETE' }),
   listItems: () => request('/api/stock/items'),

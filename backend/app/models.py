@@ -451,3 +451,25 @@ class InvoiceStockLink(Base):
     location_id = Column(UUID(as_uuid=False), ForeignKey("stock_locations.id"), nullable=False)
     quantity = Column(Float, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AIToolCallLog(Base):
+    """
+    Every tool call Lekha AI makes - not the chat transcript itself (that
+    stays client-side for now, kept simple deliberately for this first
+    phase), but a record of what action was taken, with what arguments,
+    and what came back. This is the audit trail: if the AI ever does
+    something wrong, this is how you'd find out what it actually did.
+    Brand new table, company_id is nullable to match the fallback pattern
+    every other company-scoped table uses.
+    """
+    __tablename__ = "ai_tool_call_log"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
+    company_id = Column(UUID(as_uuid=False), ForeignKey("companies.id"), nullable=True, index=True)
+    user_id = Column(String, nullable=True)
+    tool_name = Column(String, nullable=False)
+    arguments_json = Column(Text, nullable=True)
+    result_json = Column(Text, nullable=True)
+    status = Column(String, nullable=False)  # "success" | "error"
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)

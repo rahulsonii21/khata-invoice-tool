@@ -16,6 +16,7 @@ const GenerateBill = lazy(() => import('./components/GenerateBill'))
 const Reports = lazy(() => import('./components/Reports'))
 const SupplierList = lazy(() => import('./components/SupplierList'))
 const Stock = lazy(() => import('./components/Stock'))
+const AIChat = lazy(() => import('./components/AIChat'))
 const SupplierDetail = lazy(() => import('./components/SupplierDetail'))
 const Accounts = lazy(() => import('./components/Accounts'))
 
@@ -26,6 +27,7 @@ const TABS = [
   { id: 'parties', label: 'Parties' },
   { id: 'suppliers', label: 'Suppliers' },
   { id: 'stock', label: 'Stock' },
+  { id: 'ai', label: 'Lekha AI' },
   { id: 'reports', label: 'Reports' },
   { id: 'backups', label: 'Backups' },
   { id: 'settings', label: 'Settings' },
@@ -176,6 +178,7 @@ export default function App() {
         {tab === 'settings' && <CompanySettings />}
         {tab === 'reports' && <Reports />}
         {tab === 'stock' && <Stock />}
+        {tab === 'ai' && <AIChat />}
         {tab === 'accounts' && <Accounts onFirstAccountCreated={() => setNeedsLogin(false)} />}
       </Suspense>
 

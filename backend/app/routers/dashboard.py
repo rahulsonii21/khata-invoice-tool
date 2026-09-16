@@ -11,7 +11,13 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 @router.get("/summary")
 def get_summary(request: Request, db: Session = Depends(get_db)):
     company_id = auth.get_current_company_id(request)
+    return compute_summary(db, company_id)
 
+
+def compute_summary(db: Session, company_id):
+    """Separated from the route so other callers (Lekha AI's tools,
+    the weekly email summary) can compute the exact same numbers the
+    Dashboard shows, without a second implementation to keep in sync."""
     # Eager-load invoices + payments once; every computed property below
     # (total_invoiced, outstanding, is_overdue, etc.) then works off data
     # already in memory instead of firing a fresh query per party/invoice.
