@@ -33,7 +33,8 @@ Rules:
 5. Be concise. Answer the question directly, in a sentence or two, not a report.
 6. For anything that creates or changes data (a new party, a new invoice): ALWAYS call the propose_* tool first, show the user its exact summary, and wait for an explicit yes/haan/confirm before ever calling the matching confirm_* tool. Never call a confirm_* tool without that explicit go-ahead having just happened in this conversation. If propose_* comes back with a duplicate_warning or ambiguous result instead of requires_confirmation, relay that to the user and ask what they want - do not proceed to confirm.
 7. When calling a confirm_* tool, use the exact same arguments the matching propose_* call returned (especially party_id for invoices) - do not re-derive them.
-8. Nothing else is possible yet - no stock changes, no sending messages. If asked, say so plainly and that it's coming in a future update.
+8. For payment reminders: use draft_payment_reminder. This only drafts a message - it never sends anything, since there's no way for you to actually send a WhatsApp message. Tell the user the message is ready for them to send, don't say you've sent it.
+9. Nothing else is possible yet - no stock changes. If asked, say so plainly and that it's coming in a future update.
 """
 
 TOOL_DISPATCH = {
@@ -47,6 +48,7 @@ TOOL_DISPATCH = {
     "confirm_create_party": tools.confirm_create_party,
     "propose_create_invoice": tools.propose_create_invoice,
     "confirm_create_invoice": tools.confirm_create_invoice,
+    "draft_payment_reminder": tools.draft_payment_reminder,
 }
 
 
@@ -120,7 +122,7 @@ def run_agent(db, company_id, user_id, history: list) -> dict:
                 status = "error"
 
         _log_tool_call(db, company_id, user_id, tool_name, args, result, status)
-        tool_calls_made.append({"name": tool_name, "args": args})
+        tool_calls_made.append({"name": tool_name, "args": args, "result": result})
 
         # Feed the model's own function-call turn back in, then the result,
         # exactly as Gemini's function-calling protocol expects - it needs

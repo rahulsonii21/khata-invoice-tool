@@ -549,6 +549,7 @@ class AIChatRequest(BaseModel):
 class AIToolCallOut(BaseModel):
     name: str
     args: dict
+    result: dict = {}
 
 
 class AIChatResponse(BaseModel):

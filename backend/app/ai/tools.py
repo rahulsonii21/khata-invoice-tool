@@ -286,3 +286,57 @@ def _first_validation_message(e) -> str:
     if errors:
         return errors[0].get("msg", str(e))
     return str(e)
+
+
+def draft_payment_reminder(db, company_id, party_name: str) -> dict:
+    """
+    Drafts a payment reminder message for a party - does NOT send anything
+    (there's no server-side WhatsApp sending in this app, and there won't
+    be without Meta's paid Business API). This just prepares the message
+    text; the frontend turns it into a WhatsApp link the user taps to
+    actually send, the same way every other WhatsApp feature in the app
+    already works.
+    """
+    matches = (
+        db.query(models.Party)
+        .filter(models.Party.company_id == company_id)
+        .filter(models.Party.name.ilike(f"%{party_name.strip()}%"))
+        .all()
+    )
+    if not matches:
+        return {"found": False, "message": f"No party found matching '{party_name}'"}
+    if len(matches) > 1:
+        return {
+            "found": False,
+            "ambiguous": True,
+            "matches": [{"id": p.id, "name": p.name} for p in matches],
+            "message": "More than one party matches - ask the user which one they mean.",
+        }
+
+    party = matches[0]
+    if party.outstanding <= 0:
+        return {"found": True, "has_outstanding": False, "party_name": party.name, "message": f"{party.name} has no outstanding balance - nothing to remind them about."}
+
+    if not party.phone:
+        return {
+            "found": True,
+            "has_outstanding": True,
+            "can_send": False,
+            "party_name": party.name,
+            "outstanding": party.outstanding,
+            "message": f"{party.name} owes ₹{party.outstanding:,.0f}, but has no phone number saved, so a WhatsApp reminder can't be prepared - add one to their party details first.",
+        }
+
+    draft_text = (
+        f"Namaste {party.name} ji, aapke account mein ₹{party.outstanding:,.0f} payment pending hai. "
+        f"Kripya convenient time par payment arrange kar dein. Dhanyavaad."
+    )
+    return {
+        "found": True,
+        "has_outstanding": True,
+        "can_send": True,
+        "party_name": party.name,
+        "phone": party.phone,
+        "outstanding": party.outstanding,
+        "draft_message": draft_text,
+    }

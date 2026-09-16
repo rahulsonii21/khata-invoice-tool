@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { api } from '../api'
+import { openWhatsAppMessage } from '../utils'
 
 const SUGGESTIONS = [
   'How much is outstanding?',
@@ -84,6 +85,20 @@ export default function AIChat() {
                 </div>
               )}
               <p className="whitespace-pre-wrap">{m.text}</p>
+              {(() => {
+                const reminder = m.toolCalls?.find(
+                  (tc) => tc.name === 'draft_payment_reminder' && tc.result?.can_send
+                )
+                if (!reminder) return null
+                return (
+                  <button
+                    onClick={() => openWhatsAppMessage(reminder.result.phone, reminder.result.draft_message)}
+                    className="mt-2 flex items-center gap-1.5 rounded-md bg-[#25D366] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#20bd5a]"
+                  >
+                    Send via WhatsApp
+                  </button>
+                )
+              })()}
             </div>
           </div>
         ))}

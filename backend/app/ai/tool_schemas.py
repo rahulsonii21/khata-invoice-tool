@@ -119,6 +119,17 @@ TOOL_DECLARATIONS = [
             "required": ["party_id", "amount"],
         },
     },
+    {
+        "name": "draft_payment_reminder",
+        "description": "Draft a WhatsApp payment reminder message for a party with an outstanding balance. This does NOT send anything - there is no server-side WhatsApp sending in this app. It returns the drafted message and the party's phone number, which the app shows as a button the user taps to actually open WhatsApp and send it themselves.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "party_name": {"type": "string"},
+            },
+            "required": ["party_name"],
+        },
+    },
 ]
 
 # Maps a tool name to the actual Python function that implements it -
