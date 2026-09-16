@@ -130,6 +130,34 @@ TOOL_DECLARATIONS = [
             "required": ["party_name"],
         },
     },
+    {
+        "name": "propose_stock_transfer",
+        "description": "Check that enough stock is available and resolve the item/locations by name for a transfer between two locations, WITHOUT moving anything yet. Always call this before confirm_stock_transfer.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "item_name": {"type": "string"},
+                "from_location_name": {"type": "string"},
+                "to_location_name": {"type": "string"},
+                "quantity": {"type": "number"},
+            },
+            "required": ["item_name", "from_location_name", "to_location_name", "quantity"],
+        },
+    },
+    {
+        "name": "confirm_stock_transfer",
+        "description": "Actually moves the stock. Only call this after propose_stock_transfer succeeded (requires_confirmation: true) AND the user has explicitly said yes/confirmed - use the exact item_id/from_location_id/to_location_id it returned, not the names.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "item_id": {"type": "string"},
+                "from_location_id": {"type": "string"},
+                "to_location_id": {"type": "string"},
+                "quantity": {"type": "number"},
+            },
+            "required": ["item_id", "from_location_id", "to_location_id", "quantity"],
+        },
+    },
 ]
 
 # Maps a tool name to the actual Python function that implements it -

@@ -163,45 +163,67 @@ def transfer_stock(item_id: str, payload: schemas.StockTransferRequest, request:
     independent edits.
     """
     company_id = auth.get_current_company_id(request)
+    try:
+        item = apply_stock_transfer(
+            db, company_id, item_id, payload.from_location_id, payload.to_location_id, payload.quantity
+        )
+    except StockTransferError as e:
+        raise HTTPException(e.status_code, str(e))
+    return _to_out(item)
+
+
+class StockTransferError(Exception):
+    def __init__(self, status_code: int, message: str):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def apply_stock_transfer(db: Session, company_id, item_id: str, from_location_id: str, to_location_id: str, quantity: float):
+    """
+    The actual transfer logic, separated so Lekha AI's stock-transfer tool
+    can reuse the exact same rules (existence checks, same-place rejection,
+    available-quantity check) rather than a second implementation. Raises
+    StockTransferError with a plain message on any problem; the FastAPI
+    endpoint above turns that into the matching HTTPException, and the AI
+    tool turns it into a plain dict the model can relay to the user.
+    """
     item = db.query(models.Item).filter(models.Item.id == item_id, models.Item.company_id == company_id).first()
     if not item:
-        raise HTTPException(404, "Item not found")
+        raise StockTransferError(404, "Item not found")
 
-    if payload.from_location_id == payload.to_location_id:
-        raise HTTPException(422, "Source and destination can't be the same place")
+    if from_location_id == to_location_id:
+        raise StockTransferError(422, "Source and destination can't be the same place")
 
     from_location = db.query(models.StockLocation).filter(
-        models.StockLocation.id == payload.from_location_id, models.StockLocation.company_id == company_id
+        models.StockLocation.id == from_location_id, models.StockLocation.company_id == company_id
     ).first()
     to_location = db.query(models.StockLocation).filter(
-        models.StockLocation.id == payload.to_location_id, models.StockLocation.company_id == company_id
+        models.StockLocation.id == to_location_id, models.StockLocation.company_id == company_id
     ).first()
     if not from_location or not to_location:
-        raise HTTPException(404, "Location not found")
+        raise StockTransferError(404, "Location not found")
 
     from_entry = db.query(models.ItemStock).filter(
-        models.ItemStock.item_id == item_id, models.ItemStock.location_id == payload.from_location_id
+        models.ItemStock.item_id == item_id, models.ItemStock.location_id == from_location_id
     ).first()
     available = from_entry.quantity if from_entry else 0
-    if payload.quantity > available:
-        raise HTTPException(
-            422, f"Only {available} available at {from_location.name} - can't transfer {payload.quantity}"
-        )
+    if quantity > available:
+        raise StockTransferError(422, f"Only {available} available at {from_location.name} - can't transfer {quantity}")
 
-    from_entry.quantity -= payload.quantity
+    from_entry.quantity -= quantity
 
     to_entry = db.query(models.ItemStock).filter(
-        models.ItemStock.item_id == item_id, models.ItemStock.location_id == payload.to_location_id
+        models.ItemStock.item_id == item_id, models.ItemStock.location_id == to_location_id
     ).first()
     if not to_entry:
-        to_entry = models.ItemStock(item_id=item_id, location_id=payload.to_location_id, quantity=payload.quantity)
+        to_entry = models.ItemStock(item_id=item_id, location_id=to_location_id, quantity=quantity)
         db.add(to_entry)
     else:
-        to_entry.quantity += payload.quantity
+        to_entry.quantity += quantity
 
     db.commit()
     db.refresh(item)
-    return _to_out(item)
+    return item
 
 
 @router.get("/low-stock", response_model=List[schemas.ItemOut])

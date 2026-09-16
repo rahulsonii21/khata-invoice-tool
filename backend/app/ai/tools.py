@@ -288,6 +288,102 @@ def _first_validation_message(e) -> str:
     return str(e)
 
 
+def _resolve_item_and_locations(db, company_id, item_name: str, from_location_name: str, to_location_name: str):
+    """Shared name-resolution for both propose and confirm stock-transfer
+    tools - looks up the item and both locations by name, with the same
+    'ambiguous, ask the user' handling as every other tool. Returns
+    (item, from_location, to_location, error_dict_or_None)."""
+    item_matches = (
+        db.query(models.Item)
+        .filter(models.Item.company_id == company_id)
+        .filter(models.Item.name.ilike(f"%{item_name.strip()}%"))
+        .all()
+    )
+    if not item_matches:
+        return None, None, None, {"error": f"No item found matching '{item_name}'"}
+    if len(item_matches) > 1:
+        return None, None, None, {
+            "ambiguous": True,
+            "matches": [{"id": i.id, "name": i.name} for i in item_matches],
+            "message": "More than one item matches - ask the user which one they mean.",
+        }
+
+    def _find_location(name):
+        matches = (
+            db.query(models.StockLocation)
+            .filter(models.StockLocation.company_id == company_id)
+            .filter(models.StockLocation.name.ilike(f"%{name.strip()}%"))
+            .all()
+        )
+        return matches
+
+    from_matches = _find_location(from_location_name)
+    if not from_matches:
+        return None, None, None, {"error": f"No location found matching '{from_location_name}'"}
+    if len(from_matches) > 1:
+        return None, None, None, {
+            "ambiguous": True,
+            "matches": [{"id": l.id, "name": l.name} for l in from_matches],
+            "message": f"More than one location matches '{from_location_name}' - ask the user which one they mean.",
+        }
+
+    to_matches = _find_location(to_location_name)
+    if not to_matches:
+        return None, None, None, {"error": f"No location found matching '{to_location_name}'"}
+    if len(to_matches) > 1:
+        return None, None, None, {
+            "ambiguous": True,
+            "matches": [{"id": l.id, "name": l.name} for l in to_matches],
+            "message": f"More than one location matches '{to_location_name}' - ask the user which one they mean.",
+        }
+
+    return item_matches[0], from_matches[0], to_matches[0], None
+
+
+def propose_stock_transfer(db, company_id, item_name: str, from_location_name: str, to_location_name: str, quantity: float) -> dict:
+    """Resolves the item and both locations by name, checks enough stock is
+    actually available at the source, but transfers NOTHING yet."""
+    from ..routers.stock import _to_out
+
+    item, from_loc, to_loc, error = _resolve_item_and_locations(db, company_id, item_name, from_location_name, to_location_name)
+    if error:
+        return error
+
+    if from_loc.id == to_loc.id:
+        return {"error": "Source and destination can't be the same place."}
+    if quantity <= 0:
+        return {"error": "Quantity must be greater than zero."}
+
+    out = _to_out(item)
+    available = next((s.quantity for s in out.stock_by_location if s.location_id == from_loc.id), 0)
+    if quantity > available:
+        return {"error": f"Only {available} {out.unit or ''} available at {from_loc.name} - can't transfer {quantity}."}
+
+    return {
+        "requires_confirmation": True,
+        "action": "transfer_stock",
+        "args": {"item_id": item.id, "from_location_id": from_loc.id, "to_location_id": to_loc.id, "quantity": quantity},
+        "summary": f"Transfer {quantity} {out.unit or ''} of {item.name} from {from_loc.name} to {to_loc.name}?",
+    }
+
+
+def confirm_stock_transfer(db, company_id, item_id: str, from_location_id: str, to_location_id: str, quantity: float) -> dict:
+    """Actually performs the transfer - reuses the exact same
+    apply_stock_transfer function the real /transfer API endpoint uses,
+    so this is never a second implementation of the transfer rules."""
+    from ..routers.stock import apply_stock_transfer, StockTransferError, _to_out
+
+    try:
+        item = apply_stock_transfer(db, company_id, item_id, from_location_id, to_location_id, quantity)
+    except StockTransferError as e:
+        return {"error": str(e)}
+
+    out = _to_out(item)
+    return {"transferred": True, "item_name": out.name, "quantity": quantity, "new_totals": [
+        {"location": s.location_name, "quantity": s.quantity} for s in out.stock_by_location
+    ]}
+
+
 def draft_payment_reminder(db, company_id, party_name: str) -> dict:
     """
     Drafts a payment reminder message for a party - does NOT send anything

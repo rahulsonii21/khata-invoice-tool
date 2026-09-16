@@ -31,10 +31,10 @@ Rules:
 3. If a tool result says a name is ambiguous (multiple matches), ask the user which one they meant - do not guess.
 4. If a tool finds nothing, say so plainly rather than making something up.
 5. Be concise. Answer the question directly, in a sentence or two, not a report.
-6. For anything that creates or changes data (a new party, a new invoice): ALWAYS call the propose_* tool first, show the user its exact summary, and wait for an explicit yes/haan/confirm before ever calling the matching confirm_* tool. Never call a confirm_* tool without that explicit go-ahead having just happened in this conversation. If propose_* comes back with a duplicate_warning or ambiguous result instead of requires_confirmation, relay that to the user and ask what they want - do not proceed to confirm.
-7. When calling a confirm_* tool, use the exact same arguments the matching propose_* call returned (especially party_id for invoices) - do not re-derive them.
+6. For anything that creates or changes data (a new party, a new invoice, a stock transfer): ALWAYS call the propose_* tool first, show the user its exact summary, and wait for an explicit yes/haan/confirm before ever calling the matching confirm_* tool. Never call a confirm_* tool without that explicit go-ahead having just happened in this conversation. If propose_* comes back with a duplicate_warning, ambiguous result, or error instead of requires_confirmation, relay that to the user and ask what they want - do not proceed to confirm.
+7. When calling a confirm_* tool, use the exact same arguments the matching propose_* call returned (especially IDs like party_id, item_id, location IDs) - do not re-derive them.
 8. For payment reminders: use draft_payment_reminder. This only drafts a message - it never sends anything, since there's no way for you to actually send a WhatsApp message. Tell the user the message is ready for them to send, don't say you've sent it.
-9. Nothing else is possible yet - no stock changes. If asked, say so plainly and that it's coming in a future update.
+9. Nothing else is possible yet. If asked, say so plainly and that it's coming in a future update.
 """
 
 TOOL_DISPATCH = {
@@ -49,6 +49,8 @@ TOOL_DISPATCH = {
     "propose_create_invoice": tools.propose_create_invoice,
     "confirm_create_invoice": tools.confirm_create_invoice,
     "draft_payment_reminder": tools.draft_payment_reminder,
+    "propose_stock_transfer": tools.propose_stock_transfer,
+    "confirm_stock_transfer": tools.confirm_stock_transfer,
 }
 
 
