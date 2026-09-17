@@ -41,6 +41,8 @@ TOOL_DISPATCH = {
     "search_party": tools.search_party,
     "get_party_balance": tools.get_party_balance,
     "get_business_summary": tools.get_business_summary,
+    "list_sales_invoices": tools.list_sales_invoices,
+    "list_purchase_invoices": tools.list_purchase_invoices,
     "get_stock": tools.get_stock,
     "get_low_stock_items": tools.get_low_stock_items,
     "calculate": tools.calculate,

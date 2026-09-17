@@ -33,6 +33,28 @@ TOOL_DECLARATIONS = [
         "parameters": {"type": "object", "properties": {}},
     },
     {
+        "name": "list_sales_invoices",
+        "description": "List sales invoices (bills to customers), optionally filtered by party name and/or month. Use this for requests like 'invoices for May', 'bills for Ramesh Traders', 'show me all sales in March 2026'.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "party_name": {"type": "string", "description": "Filter to one party, if given"},
+                "month": {"type": "string", "description": "YYYY-MM, e.g. '2026-05' for May 2026, if given"},
+            },
+        },
+    },
+    {
+        "name": "list_purchase_invoices",
+        "description": "List purchase invoices (bills from suppliers - what you owe them), optionally filtered by supplier name and/or month. The payable-side mirror of list_sales_invoices.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "supplier_name": {"type": "string", "description": "Filter to one supplier, if given"},
+                "month": {"type": "string", "description": "YYYY-MM, e.g. '2026-05' for May 2026, if given"},
+            },
+        },
+    },
+    {
         "name": "get_stock",
         "description": "Get current stock quantity for a specific item, broken down by location.",
         "parameters": {

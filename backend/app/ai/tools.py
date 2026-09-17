@@ -125,6 +125,126 @@ def get_low_stock_items(db, company_id) -> dict:
     }
 
 
+def list_sales_invoices(db, company_id, party_name: str = None, month: str = None) -> dict:
+    """
+    Lists sales invoices, optionally filtered by party name and/or month
+    (YYYY-MM) - reuses the exact same filtering the real Invoices list
+    screen uses. Capped at 50 results (most recent first) so a broad
+    query doesn't dump the entire ledger into the conversation.
+    """
+    import calendar
+    from datetime import date as date_cls
+    from sqlalchemy.orm import selectinload
+
+    query = db.query(models.Invoice).options(selectinload(models.Invoice.payments)).filter(
+        models.Invoice.company_id == company_id
+    )
+
+    if party_name:
+        matches = (
+            db.query(models.Party)
+            .filter(models.Party.company_id == company_id)
+            .filter(models.Party.name.ilike(f"%{party_name.strip()}%"))
+            .all()
+        )
+        if not matches:
+            return {"error": f"No party found matching '{party_name}'"}
+        if len(matches) > 1:
+            return {
+                "ambiguous": True,
+                "matches": [{"id": p.id, "name": p.name} for p in matches],
+                "message": "More than one party matches - ask the user which one they mean.",
+            }
+        query = query.filter(models.Invoice.party_id == matches[0].id)
+
+    if month:
+        try:
+            year, mon = (int(x) for x in month.split("-"))
+            last_day = calendar.monthrange(year, mon)[1]
+            query = query.filter(
+                models.Invoice.invoice_date >= date_cls(year, mon, 1),
+                models.Invoice.invoice_date <= date_cls(year, mon, last_day),
+            )
+        except (ValueError, AttributeError):
+            return {"error": "month must be in YYYY-MM format, e.g. 2026-05"}
+
+    invoices = query.order_by(models.Invoice.invoice_date.desc().nullslast()).limit(50).all()
+    return {
+        "count": len(invoices),
+        "total_amount": sum(inv.amount for inv in invoices),
+        "invoices": [
+            {
+                "party_name": inv.party.name if inv.party else None,
+                "date": str(inv.invoice_date) if inv.invoice_date else None,
+                "amount": inv.amount,
+                "outstanding": inv.outstanding,
+                "status": inv.status.value if hasattr(inv.status, "value") else str(inv.status),
+            }
+            for inv in invoices
+        ],
+    }
+
+
+def list_purchase_invoices(db, company_id, supplier_name: str = None, month: str = None) -> dict:
+    """
+    Lists purchase invoices (what's owed to suppliers), optionally
+    filtered by supplier name and/or month (YYYY-MM) - the payable-side
+    mirror of list_sales_invoices, reusing the same filtering the real
+    Purchases list screen uses.
+    """
+    import calendar
+    from datetime import date as date_cls
+    from sqlalchemy.orm import selectinload
+
+    query = db.query(models.Purchase).options(selectinload(models.Purchase.payments)).filter(
+        models.Purchase.company_id == company_id
+    )
+
+    if supplier_name:
+        matches = (
+            db.query(models.Supplier)
+            .filter(models.Supplier.company_id == company_id)
+            .filter(models.Supplier.name.ilike(f"%{supplier_name.strip()}%"))
+            .all()
+        )
+        if not matches:
+            return {"error": f"No supplier found matching '{supplier_name}'"}
+        if len(matches) > 1:
+            return {
+                "ambiguous": True,
+                "matches": [{"id": s.id, "name": s.name} for s in matches],
+                "message": "More than one supplier matches - ask the user which one they mean.",
+            }
+        query = query.filter(models.Purchase.supplier_id == matches[0].id)
+
+    if month:
+        try:
+            year, mon = (int(x) for x in month.split("-"))
+            last_day = calendar.monthrange(year, mon)[1]
+            query = query.filter(
+                models.Purchase.purchase_date >= date_cls(year, mon, 1),
+                models.Purchase.purchase_date <= date_cls(year, mon, last_day),
+            )
+        except (ValueError, AttributeError):
+            return {"error": "month must be in YYYY-MM format, e.g. 2026-05"}
+
+    purchases = query.order_by(models.Purchase.purchase_date.desc().nullslast()).limit(50).all()
+    return {
+        "count": len(purchases),
+        "total_amount": sum(p.amount for p in purchases),
+        "purchases": [
+            {
+                "supplier_name": p.supplier.name if p.supplier else None,
+                "date": str(p.purchase_date) if p.purchase_date else None,
+                "amount": p.amount,
+                "outstanding": p.outstanding,
+                "status": p.status.value if hasattr(p.status, "value") else str(p.status),
+            }
+            for p in purchases
+        ],
+    }
+
+
 def calculate(db, company_id, expression: str) -> dict:
     """
     A safe, deterministic calculator - Gemini describes what to compute in
